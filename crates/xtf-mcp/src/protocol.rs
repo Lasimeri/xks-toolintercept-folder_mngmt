@@ -27,10 +27,11 @@ rest (1 to 4 s a call), and answers under 0.5 confidence are reported as unsure 
 acted on. Tools: new_project sets up a new project folder (decides its kind, writes the \
 manifest with a conventional folder layout, can create the folders); plan_tree places a whole \
 set of planned files and folders in one call and returns the resulting tree; place_file checks \
-where one new, moved or renamed file or folder belongs; pick_name chooses among candidate names; \
-project_info reads the nearest manifest. They help when starting a project or a folder \
-structure, when a new file's place is not obvious, and when choosing a name. Every placement is \
-logged in the project's .xks/decisions.jsonl.";
+where one new, moved or renamed file or folder belongs; both report layout gaps (planned paths \
+outside every layout folder), which extend_layout closes by adding a folder to the layout under \
+a role; pick_name chooses among candidate names; project_info reads the nearest manifest. They \
+help when starting a project or a folder structure, when a new file's place is not obvious, and \
+when choosing a name. Every placement is logged in the project's .xks/decisions.jsonl.";
 
 /// The `initialize` result for a client that sent `params`.
 pub fn initialize(params: &Value) -> Value {
@@ -46,11 +47,12 @@ pub fn initialize(params: &Value) -> Value {
     })
 }
 
-/// The tools, in the order listed.
-pub const TOOLS: [&str; 5] = [
+/// The tools, in the order listed: the order of setting up a project.
+pub const TOOLS: [&str; 6] = [
     "new_project",
     "plan_tree",
     "place_file",
+    "extend_layout",
     "pick_name",
     "project_info",
 ];
@@ -92,7 +94,7 @@ pub fn tools_list() -> Value {
         {
             "name": "plan_tree",
             "title": "Plan a folder tree",
-            "description": "Places a whole set of planned files and folders of one project (1 to 64; a path ending in / is a folder) in one call, before they are written: the rules first, then the model's file.root question for the rest, batched on the project's manifest in requests of up to 8 questions (the one shared server answers one request at a time; other sessions' hooks wait behind each). Returns each verdict (allow, suggest with suggested_path, or uncertain under 0.5 confidence) and the resulting tree, the paths after the suggestions. Each decision is logged in .xks/decisions.jsonl. About 1.3 to 2 s per file the rules leave open.",
+            "description": "Places a whole set of planned files and folders of one project (1 to 64; a path ending in / is a folder) in one call, before they are written: the rules first, then the model's file.root question for the rest, batched on the project's manifest in requests of up to 8 questions (the one shared server answers one request at a time; other sessions' hooks wait behind each). Returns each verdict (allow, suggest with suggested_path, or uncertain under 0.5 confidence), the resulting tree (the paths after the suggestions), and layout_gaps: planned paths outside every layout folder (a new top-level folder, a path under an unmapped one, or a root file such as a script), each with the roles its files' types play that the layout lacks and the next step; extend_layout closes a gap. Each decision is logged in .xks/decisions.jsonl. About 1.3 to 2 s per file the rules leave open.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
@@ -119,7 +121,7 @@ pub fn tools_list() -> Value {
         {
             "name": "place_file",
             "title": "Place one file or folder",
-            "description": "Where one new, moved or renamed file or folder belongs in a project with an xks-project.json manifest, and whether its name follows the project's naming style. Rules settle deletions, generated or vendored paths and conventional top-level files; otherwise the model answers file.root (which role: source, tests, docs, tools, ...) and file.name_clear (does the name say what it holds). Verdict: allow, suggest (with suggested_path), or uncertain (confidence under 0.5, nothing suggested). Logged in .xks/decisions.jsonl. About 3 s.",
+            "description": "Where one new, moved or renamed file or folder belongs in a project with an xks-project.json manifest, and whether its name follows the project's naming style. Rules settle deletions, generated or vendored paths and conventional top-level files; otherwise the model answers file.root (which role: source, tests, docs, tools, ...) and file.name_clear (does the name say what it holds). Verdict: allow, suggest (with suggested_path), or uncertain (confidence under 0.5, nothing suggested); layout_gaps when the path lies outside every layout folder (extend_layout closes it). Logged in .xks/decisions.jsonl. About 3 s.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
@@ -130,6 +132,34 @@ pub fn tools_list() -> Value {
                     "from": {"type": "string", "description": "For move and rename: the current path."}
                 },
                 "required": ["path"],
+                "additionalProperties": false
+            },
+            "annotations": {"readOnlyHint": false, "destructiveHint": false, "idempotentHint": true, "openWorldHint": false}
+        },
+        {
+            "name": "extend_layout",
+            "title": "Add folders to the layout",
+            "description": format!(
+                "Adds folders to a project's layout in xks-project.json under one role, so \
+                 placements can use them: for example tools -> [\"scripts\"] after plan_tree or \
+                 place_file report a layout gap. The role is the caller's choice (the layout's \
+                 roles: {}; config is the project root itself). Each folder is checked against the \
+                 project's folder naming style, the ignore list and the existing mappings (a \
+                 folder plays one role); no mapping is ever removed or moved. The manifest is \
+                 rewritten whole under a lock, so concurrent sessions never lose a change; with \
+                 create_dirs the folders are created (mkdir only). Each added folder is logged in \
+                 .xks/decisions.jsonl. Repeating a call changes nothing. No model.",
+                crate::tools::layout_roles().join(", ")
+            ),
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "path_or_root": {"type": "string", "minLength": 1, "description": "A path inside the project (or its root); the manifest is found at or above it."},
+                    "role": {"type": "string", "enum": crate::tools::layout_roles(), "description": "The role the folders play."},
+                    "dirs": {"type": "array", "minItems": 1, "maxItems": crate::tools::MAX_EXTEND, "items": {"type": "string", "minLength": 1}, "description": "Folders relative to the project root, e.g. [\"scripts\"] or [\"src/tui\"]."},
+                    "create_dirs": {"type": "boolean", "default": false, "description": "Also create the folders (mkdir only)."}
+                },
+                "required": ["path_or_root", "role", "dirs"],
                 "additionalProperties": false
             },
             "annotations": {"readOnlyHint": false, "destructiveHint": false, "idempotentHint": true, "openWorldHint": false}

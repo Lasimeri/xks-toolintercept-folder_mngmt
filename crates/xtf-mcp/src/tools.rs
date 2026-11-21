@@ -1,4 +1,4 @@
-//! The five tools. Each checks its arguments against its schema here (a
+//! The six tools. Each checks its arguments against its schema here (a
 //! client may send anything) and returns an `Outcome`: a one-line summary,
 //! then the result as compact JSON; or a plain message marked as an error
 //! when it cannot answer (no manifest, arguments that do not fit, the
@@ -11,7 +11,11 @@
 //! | `plan_tree`    | file.root per open file, batched      | one line per planned path      |
 //! | `pick_name`    | name.pick                             | nothing                        |
 //! | `new_project`  | project.kind, unless `kind` is given  | the manifest, folders (mkdir), the kind decision |
+//! | `extend_layout`| none (the caller names the role)      | the manifest's layout, folders (mkdir), one line per folder |
 //! | `project_info` | none                                  | nothing                        |
+//!
+//! `place_file` and `plan_tree` also report layout gaps (`layout`): planned
+//! paths outside every layout folder, which `extend_layout` closes.
 
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::io::{Read, Write};
@@ -24,11 +28,11 @@ use xtf_standard::decide::{self, Decision, LOG_FILE};
 use xtf_standard::policy::{self, Pre};
 use xtf_standard::projection::summary_of;
 use xtf_standard::{
-    Action, Decider, MANIFEST_FILE, Manifest, Op, Projection, STANDARD, Thresholds, Verdict,
+    Action, Decider, MANIFEST_FILE, Manifest, Op, Projection, Role, STANDARD, Thresholds, Verdict,
     catalog, naming, scaffold,
 };
 
-use crate::ask;
+use crate::{ask, layout};
 
 /// Most planned paths in one `plan_tree` call.
 pub const MAX_PLAN: usize = 64;
@@ -36,6 +40,17 @@ pub const MAX_PLAN: usize = 64;
 const CANDIDATES: std::ops::RangeInclusive<usize> = 2..=26;
 /// Longest candidate name, in characters.
 const CANDIDATE_CHARS: usize = 200;
+/// Most folders one `extend_layout` call adds.
+pub const MAX_EXTEND: usize = 8;
+
+/// The roles `extend_layout` takes: every role but `config` (the root).
+pub fn layout_roles() -> Vec<&'static str> {
+    Role::ALL
+        .into_iter()
+        .filter(|r| *r != Role::Config)
+        .map(Role::key)
+        .collect()
+}
 
 /// A tool's answer: the text Claude reads, and whether the call failed.
 #[derive(Debug)]
@@ -68,6 +83,7 @@ pub fn call(name: &str, args: &Map<String, Value>) -> Outcome {
         "plan_tree" => plan_tree(&a),
         "place_file" => place_file(&a),
         "pick_name" => pick_name(&a),
+        "extend_layout" => extend_layout(&a),
         "project_info" => project_info(&a),
         other => Err(format!("unknown tool `{other}`")),
     };
@@ -299,6 +315,12 @@ fn place_file(a: &Args) -> Result<Outcome, String> {
     .map(|(d, _)| d)
     .map_err(|e| format!("{}.{}", ask::describe(&e, &base), rules_alone(&m, &p)))?;
     let logged = log(&root, &p, &d);
+    let gaps = layout::gaps(&m, [&p]);
+    let line = format!(
+        "xks-folder/1: {}{}",
+        verdict_text(&p.path, &d.verdict),
+        layout::line_note(&gaps)
+    );
     let data = json!({
         "standard": STANDARD,
         "root": shown(&root),
@@ -306,10 +328,10 @@ fn place_file(a: &Args) -> Result<Outcome, String> {
         "projected": p,
         "verdict": d.verdict,
         "answers": d.answers,
+        "layout_gaps": gaps,
         "seconds": round3(d.seconds),
         "logged": logged,
     });
-    let line = format!("xks-folder/1: {}", verdict_text(&p.path, &d.verdict));
     Ok(Outcome::ok(&line, &data))
 }
 
@@ -535,6 +557,8 @@ fn plan_tree(a: &Args) -> Result<Outcome, String> {
     if !collisions.is_empty() {
         line.push_str(&format!("; {} final paths claimed twice", collisions.len()));
     }
+    let gaps = layout::gaps(&m, plan.iter().map(|item| &item.p));
+    line.push_str(&layout::line_note(&gaps));
     let data = json!({
         "standard": STANDARD,
         "root": shown(&root),
@@ -542,6 +566,7 @@ fn plan_tree(a: &Args) -> Result<Outcome, String> {
         "files": out,
         "tree": tree,
         "collisions": collisions,
+        "layout_gaps": gaps,
         "requests": requests,
         "logged": logged,
     });
@@ -869,6 +894,186 @@ fn new_project(a: &Args) -> Result<Outcome, String> {
     Ok(Outcome::ok(&line, &data))
 }
 
+/// The serde name of a naming style (`kebab-case`, ...).
+fn style_key(s: naming::Style) -> String {
+    serde_json::to_value(s)
+        .ok()
+        .and_then(|v| v.as_str().map(str::to_string))
+        .unwrap_or_default()
+}
+
+/// Whether `dir` may join the layout as `role` in `m`: Ok(true) when it
+/// already plays that role, Ok(false) when it is new, Err why not.
+fn layout_check(m: &Manifest, role: Role, dir: &str) -> Result<bool, String> {
+    let same = |x: &String| layout::plain_dir(x).is_ok_and(|x| x == dir);
+    let under = |x: &String| {
+        layout::plain_dir(x).is_ok_and(|x| x == dir || dir.starts_with(&format!("{x}/")))
+    };
+    if let Some(i) = m.ignore.iter().find(|i| under(i)) {
+        return Err(format!(
+            "`{dir}/` is under `{i}` in the manifest's ignore list: nothing there is decided \
+             on, so it cannot play a role"
+        ));
+    }
+    for (r, ds) in &m.layout {
+        if ds.iter().any(same) {
+            if *r == role {
+                return Ok(true);
+            }
+            return Err(format!(
+                "`{dir}/` is already the layout's {} folder; a folder plays one role",
+                r.key()
+            ));
+        }
+    }
+    let style = m.naming.dirs;
+    if let Some(c) = dir.split('/').find(|c| !naming::follows(c, style)) {
+        return Err(format!(
+            "`{c}` does not follow the project's folder naming style ({}); `{}` does",
+            style_key(style),
+            naming::convert(c, style)
+        ));
+    }
+    Ok(false)
+}
+
+/// `extend_layout`: folders added to the layout under the role the caller
+/// names (never a mapping removed or moved), the manifest rewritten whole
+/// under a lock, the folders created on request, each addition logged.
+fn extend_layout(a: &Args) -> Result<Outcome, String> {
+    a.only(&["path_or_root", "role", "dirs", "create_dirs"])?;
+    let abs = absolute(&a.need("path_or_root")?)?;
+    let key = a.need("role")?.trim().to_string();
+    let role = Role::from_key(&key)
+        .filter(|r| *r != Role::Config)
+        .ok_or_else(|| {
+            format!(
+                "unknown role `{key}`; the layout's roles are {} (config is the project root \
+                 itself and takes no folder)",
+                layout_roles().join(", ")
+            )
+        })?;
+    let raw = a.texts("dirs")?.ok_or_else(|| {
+        format!("`dirs` is required: 1 to {MAX_EXTEND} folders relative to the project root")
+    })?;
+    if raw.is_empty() || raw.len() > MAX_EXTEND {
+        return Err(format!(
+            "`dirs` holds 1 to {MAX_EXTEND} folders, not {}",
+            raw.len()
+        ));
+    }
+    let mut dirs: Vec<String> = Vec::with_capacity(raw.len());
+    for d in &raw {
+        let d = layout::plain_dir(d)?;
+        if !dirs.contains(&d) {
+            dirs.push(d);
+        }
+    }
+    let create_dirs = a.flag("create_dirs")?.unwrap_or(false);
+    let (root, _) = project(&abs)?;
+    for d in &dirs {
+        let p = root.join(d);
+        if p.exists() && !p.is_dir() {
+            return Err(format!("{} exists and is not a folder", p.display()));
+        }
+    }
+    let (added, already, m) = layout::update_manifest(&root, |m| {
+        let mut added = Vec::new();
+        let mut already = Vec::new();
+        for d in &dirs {
+            if layout_check(m, role, d)? {
+                already.push(d.clone());
+            } else {
+                added.push(d.clone());
+            }
+        }
+        m.layout
+            .entry(role)
+            .or_default()
+            .extend(added.iter().cloned());
+        Ok((added, already, m.clone()))
+    })?;
+    let mut logged = json!(LOG_FILE);
+    for d in &added {
+        let p = Projection {
+            op: Op::CreateDir,
+            path: d.clone(),
+            from: None,
+            summary: format!("a {key} folder of the layout"),
+            tool: Some("extend_layout".into()),
+        };
+        let d = Decision {
+            verdict: Verdict {
+                action: Action::Allow,
+                notes: vec![format!(
+                    "added to the layout as {key} (the role the caller named)"
+                )],
+                suggested_path: None,
+                role: Some(key.clone()),
+                confidence: None,
+            },
+            answers: Map::new(),
+            seconds: 0.0,
+        };
+        let l = log(&root, &p, &d);
+        if l != json!(LOG_FILE) {
+            logged = l;
+        }
+    }
+    let mut folders = Vec::with_capacity(dirs.len());
+    let mut made = 0usize;
+    for d in &dirs {
+        let p = root.join(d);
+        let state = if p.is_dir() {
+            "exists".to_string()
+        } else if !create_dirs {
+            "planned".to_string()
+        } else {
+            match std::fs::create_dir_all(&p) {
+                Ok(()) => {
+                    made += 1;
+                    "created".to_string()
+                }
+                Err(e) => format!("not created: {e}"),
+            }
+        };
+        folders.push(json!({"folder": format!("{d}/"), "state": state}));
+    }
+    let slash = |v: &[String]| v.iter().map(|d| format!("{d}/")).collect::<Vec<_>>();
+    let now = m.layout.get(&role).map(|v| slash(v)).unwrap_or_default();
+    let mut what = Vec::new();
+    if !added.is_empty() {
+        what.push(format!("added {}", slash(&added).join(" ")));
+    }
+    if !already.is_empty() {
+        what.push(format!("already there: {}", slash(&already).join(" ")));
+    }
+    if create_dirs {
+        what.push(format!(
+            "{made} folder{} created",
+            if made == 1 { "" } else { "s" }
+        ));
+    }
+    let line = format!(
+        "xks-folder/1: layout of {}: {key} -> {} ({})",
+        m.name,
+        now.join(" "),
+        what.join("; ")
+    );
+    let data = json!({
+        "standard": STANDARD,
+        "root": shown(&root),
+        "project": m.name,
+        "role": key,
+        "added": slash(&added),
+        "already": slash(&already),
+        "layout": m.layout,
+        "folders": folders,
+        "logged": if added.is_empty() { Value::Null } else { logged },
+    });
+    Ok(Outcome::ok(&line, &data))
+}
+
 /// `project_info`: the nearest manifest and the size of its decision log.
 fn project_info(a: &Args) -> Result<Outcome, String> {
     a.only(&["path"])?;
@@ -954,6 +1159,97 @@ mod tests {
         assert!(b.flag("flag").is_err());
         assert!(parse_op("move").is_ok() && parse_op("copy").is_err());
         assert_eq!(op_key(Op::CreateDir), "create_dir");
+    }
+
+    #[test]
+    fn layouts_are_extended_without_the_model() {
+        let root = std::env::temp_dir().join(format!("xtf-extend-test-{}", std::process::id()));
+        std::fs::create_dir_all(&root).unwrap();
+        // No language: kebab-case folders, so the naming check has teeth.
+        let mut m = Manifest::new(
+            "t",
+            "A set of notes and the scripts that build them.",
+            vec![],
+        );
+        m.layout = [(Role::Source, vec!["src".to_string()])]
+            .into_iter()
+            .collect();
+        m.save(&root).unwrap();
+        std::fs::write(root.join("notes"), "a file, not a folder\n").unwrap();
+        let r = root.to_string_lossy().into_owned();
+        let ext = |args: Value| call("extend_layout", args.as_object().unwrap());
+        let o = ext(
+            json!({"path_or_root": r, "role": "tools", "dirs": ["./scripts/", "scripts"],
+                           "create_dirs": true}),
+        );
+        assert!(!o.is_error, "{}", o.text);
+        assert!(
+            o.text.starts_with(
+                "xks-folder/1: layout of t: tools -> scripts/ (added scripts/; 1 folder created)\n"
+            ),
+            "{}",
+            o.text
+        );
+        assert!(root.join("scripts").is_dir());
+        assert_eq!(
+            Manifest::load(&root).unwrap().layout[&Role::Tools],
+            ["scripts"]
+        );
+        // The same call again changes nothing, not even the file.
+        let before = std::fs::read(root.join(MANIFEST_FILE)).unwrap();
+        let o = ext(json!({"path_or_root": r, "role": "tools", "dirs": ["scripts"]}));
+        assert!(
+            !o.is_error && o.text.contains("already there: scripts/"),
+            "{}",
+            o.text
+        );
+        assert!(o.text.contains("\"logged\":null"), "{}", o.text);
+        for (args, want) in [
+            (
+                json!({"path_or_root": r, "role": "docs", "dirs": ["src"]}),
+                "already the layout's source folder",
+            ),
+            (
+                json!({"path_or_root": r, "role": "config", "dirs": ["etc"]}),
+                "unknown role `config`",
+            ),
+            (
+                json!({"path_or_root": r, "role": "tool", "dirs": ["x"]}),
+                "unknown role `tool`",
+            ),
+            (
+                json!({"path_or_root": r, "role": "docs", "dirs": ["DesignNotes"]}),
+                "`design-notes` does",
+            ),
+            (
+                json!({"path_or_root": r, "role": "out", "dirs": ["target/x"]}),
+                "ignore list",
+            ),
+            (
+                json!({"path_or_root": r, "role": "docs", "dirs": ["../x"]}),
+                "cannot leave the project",
+            ),
+            (
+                json!({"path_or_root": r, "role": "docs", "dirs": []}),
+                "1 to 8 folders",
+            ),
+            (
+                json!({"path_or_root": r, "role": "docs", "dirs": ["notes"]}),
+                "is not a folder",
+            ),
+            (
+                json!({"path_or_root": r, "role": "docs", "dirs": ["a"], "x": 1}),
+                "unknown argument `x`",
+            ),
+        ] {
+            let o = ext(args);
+            assert!(o.is_error && o.text.contains(want), "{want}: {}", o.text);
+        }
+        assert_eq!(std::fs::read(root.join(MANIFEST_FILE)).unwrap(), before);
+        let log = std::fs::read_to_string(root.join(LOG_FILE)).unwrap();
+        assert_eq!(log.lines().count(), 1, "{log}");
+        assert!(log.contains("\"tool\":\"extend_layout\""), "{log}");
+        std::fs::remove_dir_all(&root).ok();
     }
 
     #[test]

@@ -21,6 +21,7 @@
 //! request may take, otherwise 20 s plus 8 s per question (`ask::budget`).
 
 mod ask;
+mod layout;
 mod protocol;
 mod rpc;
 mod tools;

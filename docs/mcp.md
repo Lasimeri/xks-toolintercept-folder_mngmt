@@ -1,6 +1,6 @@
 # xtf-mcp: the MCP server
 
-`xtf-mcp` puts the xks-folder/1 standard (SPEC.md) behind five MCP tools,
+`xtf-mcp` puts the xks-folder/1 standard (SPEC.md) behind six MCP tools,
 so a coding agent asks where new files and folders belong, what to name
 them, and how to lay out a new project, and gets the standard's verdicts.
 Every model question goes to one System One server (by default `jevbase
@@ -11,11 +11,18 @@ serve` on http://127.0.0.1:8097), the same one the Claude Code hook uses.
 | `new_project` | sets up a new project folder: kind, manifest, folder layout | `project.kind`, unless `kind` is given | `xks-project.json` (never over an existing one), the folders with `create_dirs` (mkdir only), the kind decision |
 | `plan_tree` | places 1 to 64 planned files and folders in one call, returns the resulting tree | `file.root` for each path the rules leave open, batched | one log line per planned path |
 | `place_file` | one new, moved or renamed file or folder | `file.root`, `file.name_clear` | one log line |
+| `extend_layout` | adds folders to the layout under one role | none (the caller names the role) | the manifest's layout (never a mapping removed), the folders with `create_dirs`, one log line per added folder |
 | `pick_name` | the best of 2 to 26 candidate names | `name.pick` | nothing |
 | `project_info` | the nearest manifest and the size of its decision log | none | nothing |
 
 Decisions are appended to `.xks/decisions.jsonl` under the project root, in
 the format of SPEC.md ("Decision record").
+
+The usual order: `new_project` sets up the folder and its layout;
+`plan_tree` places the first set of files; its `layout_gaps` name the
+planned paths no layout folder holds (a `scripts/` folder, a script in the
+root), and `extend_layout` adds the folder they need; `place_file` checks a
+later file on its own.
 
 ## Running it
 
@@ -61,9 +68,9 @@ The `initialize` result (recorded):
   },
   "serverInfo": {
     "name": "xtf",
-    "version": "0.1.0"
+    "version": "0.2.0"
   },
-  "instructions": "xtf answers folder and naming questions for projects that follow the xks-folder/1 standard: an xks-project.json manifest at the project root maps fixed roles (source, tests, docs, tools, data, out, ...) to the project's folders. Rules settle what needs no model; a local Jev-like model on a System One server (default http://127.0.0.1:8097, one shared instance) answers the rest (1 to 4 s a call), and answers under 0.5 confidence are reported as unsure and not acted on. Tools: new_project sets up a new project folder (decides its kind, writes the manifest with a conventional folder layout, can create the folders); plan_tree places a whole set of planned files and folders in one call and returns the resulting tree; place_file checks where one new, moved or renamed file or folder belongs; pick_name chooses among candidate names; project_info reads the nearest manifest. They help when starting a project or a folder structure, when a new file's place is not obvious, and when choosing a name. Every placement is logged in the project's .xks/decisions.jsonl."
+  "instructions": "xtf answers folder and naming questions for projects that follow the xks-folder/1 standard: an xks-project.json manifest at the project root maps fixed roles (source, tests, docs, tools, data, out, ...) to the project's folders. Rules settle what needs no model; a local Jev-like model on a System One server (default http://127.0.0.1:8097, one shared instance) answers the rest (1 to 4 s a call), and answers under 0.5 confidence are reported as unsure and not acted on. Tools: new_project sets up a new project folder (decides its kind, writes the manifest with a conventional folder layout, can create the folders); plan_tree places a whole set of planned files and folders in one call and returns the resulting tree; place_file checks where one new, moved or renamed file or folder belongs; both report layout gaps (planned paths outside every layout folder), which extend_layout closes by adding a folder to the layout under a role; pick_name chooses among candidate names; project_info reads the nearest manifest. They help when starting a project or a folder structure, when a new file's place is not obvious, and when choosing a name. Every placement is logged in the project's .xks/decisions.jsonl."
 }
 ```
 
@@ -293,6 +300,48 @@ xks-folder/1 plan of 12 paths in xks-toolintercept-folder_mngmt: 6 allow, 1 sugg
 a tools, tests, integrations or examples folder: `out` is the only role
 left for a script, so the rule decides it (see Known problems).
 
+#### Layout gaps
+
+`layout_gaps` (also in every `place_file` reply, `[]` when there is none)
+lists the planned paths that lie outside every folder of the layout, one
+entry per top-level folder or root file. They are facts read from the
+manifest and the standard's extension table, not decisions:
+
+- `unmapped_folder`: a new top-level folder, or paths under a top-level
+  folder the layout does not map (`scripts/`);
+- `root_file`: a file in the project root whose type is not one a root
+  holds (a script, a source file; conventional files such as `README.md`
+  or `Cargo.toml`, configuration files and names without a known type are
+  not gaps).
+
+Each entry gives the planned `paths` in it, `layout_lacks` (the roles their
+names or extensions make plausible that the layout has no folder for),
+`layout_has` (those it has, with their folders) and `next`, the step that
+closes it: `extend_layout` with the role, or planning the paths in a folder
+the layout has. The summary line ends with `layout gaps ... (see
+layout_gaps)` when there are any.
+
+Recorded (4 planned paths in `flacopus`, a Rust command-line tool whose
+layout maps `source`, `tests`, `docs`, `out`):
+
+```text
+xks-folder/1 plan of 4 paths in flacopus: 1 allow, 1 suggest, 2 uncertain; 0 settled by the rules, 4 asked in 1 request (9.7 s); layout gaps bench.sh, scripts/ (see layout_gaps)
+```
+
+```json
+[
+  {"at":"bench.sh","kind":"root_file","paths":["bench.sh"],"layout_lacks":["examples","tools","integrations"],"layout_has":[{"role":"tests","dir":"tests/"}],"next":"bench.sh is not a file the project root holds; roles it plays that the layout lacks: examples (examples/), tools (tools/), integrations (integrations/): add one with extend_layout {role, dirs}, then plan it in that folder; or plan it in tests/"},
+  {"at":"scripts/","kind":"unmapped_folder","paths":["scripts/","scripts/release.sh"],"layout_lacks":["examples","tools","integrations"],"layout_has":[{"role":"tests","dir":"tests/"}],"next":"the layout does not map scripts/: record the role it plays with extend_layout {role, dirs: [\"scripts\"]}; roles its planned files' types play that the layout lacks: examples, tools, integrations; or plan them in tests/ instead"}
+]
+```
+
+In the same plan the model, offered only `tests` and `out` for the scripts,
+chose `out` for both: `bench.sh` unsure (0.12), `scripts/release.sh`
+confidently (0.83, a suggestion to move it to `out/release.sh`). After
+`extend_layout` mapped `scripts/` as `tools`, `place_file` on `bench.sh`
+leaned to `tools` (probability 0.64, confidence 0.46): the right role, once
+the layout offers it.
+
 ### place_file
 
 One projected operation through the library's `Decider`: the rules, then
@@ -301,7 +350,8 @@ summary is `summary`, else the start of `content`, else the start of the
 file at the path (or at `from` for a move or rename). The model reads the
 file's name and summary, not its folder, so a file projected to a
 different folder gets the same answer, and the policy compares the chosen
-role with where the path goes.
+role with where the path goes. The reply's `layout_gaps` is that of
+`plan_tree` for the one path.
 
 | argument | type | required | meaning |
 |---|---|---|---|
@@ -359,6 +409,61 @@ xks-folder/1: crates/results-v3.txt: suggest docs/results-v3.txt; it belongs in 
   "logged": ".xks/decisions.jsonl"
 }
 ```
+
+### extend_layout
+
+Adds folders to the layout under one role, the step that closes a layout
+gap. The role is the caller's: the one a gap's `layout_lacks` or a
+verdict names, or the agent's own reading of the folder. Each folder is
+checked first, and the call fails with a message (the manifest untouched)
+when one is absolute or leaves the project, lies under an `ignore` entry,
+is already another role's folder (a folder plays one role), exists as a
+file, or breaks the project's folder naming style (the message names the
+styled form). A folder that already plays the role is reported under
+`already`; nothing is ever removed or moved. The manifest is reloaded,
+changed and written under an exclusive lock on `.xks/layout.lock`, through
+a temporary file renamed over it, so concurrent sessions never lose each
+other's folders and a reader never sees half a file; the text is the one
+`Manifest::save` writes, and an unchanged manifest is not rewritten. Each
+added folder is one log line (`"tool": "extend_layout"`, action `allow`,
+the role). No model question.
+
+| argument | type | required | meaning |
+|---|---|---|---|
+| `path_or_root` | string | yes | A path inside the project (or its root); the manifest is found at or above it. |
+| `role` | string: source, include, tests, benches, examples, docs, tools, integrations, data, assets, third_party, out | yes | The role the folders play. `config` is the project root itself and takes no folder. |
+| `dirs` | array of strings (1 to 8) | yes | Folders relative to the project root, e.g. `["scripts"]` or `["src/tui"]`. |
+| `create_dirs` | boolean | no | Also create the folders (mkdir only). Default false. |
+
+Hints: readOnlyHint false, destructiveHint false, idempotentHint true, openWorldHint false.
+
+Recorded (`flacopus` above, `scripts/` mapped as `tools`, 4 ms):
+
+```text
+xks-folder/1: layout of flacopus: tools -> scripts/ (added scripts/; 1 folder created)
+```
+
+```json
+{
+  "standard": "xks-folder/1",
+  "root": "~/work/flacopus",
+  "project": "flacopus",
+  "role": "tools",
+  "added": ["scripts/"],
+  "already": [],
+  "layout": {
+    "source": ["src"],
+    "tests": ["tests"],
+    "docs": ["docs"],
+    "tools": ["scripts"],
+    "out": ["out"]
+  },
+  "folders": [{"folder": "scripts/", "state": "created"}],
+  "logged": ".xks/decisions.jsonl"
+}
+```
+
+(Arrays are shown on one line.) `logged` is `null` when nothing was added.
 
 ### pick_name
 
