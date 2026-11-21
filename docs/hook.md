@@ -65,6 +65,13 @@ What the hook says:
 | uncertain (the model is unsure) or allow | nothing | nothing |
 | `file.name_clear` P(yes) <= 0.30 | a note naming the MCP tool `pick_name` | same |
 | the operation creates a top-level folder the layout does not list | a note with the layout (no model needed) | same |
+| the model reads a folder outside the layout (a new one, or the one a file goes under) as a role the layout lacks, confidence >= 0.5 (since 0.4.0) | recorded in xks-project.json (locked, atomic, never moving a mapping) and said as context; never denied | same |
+
+Measured (2026-11-21, Qwen3.8 2B Q8_0, a manifest with an empty layout):
+`mkdir scripts` read as tools at 0.9022 and recorded (`{"tools":
+["scripts"]}`, two decision lines: the reading, then "recorded by the xtf
+hook"); `mkdir scripts` again took 2 ms, allowed by rule as a folder the
+manifest now names.
 
 Three verdicts of the library are not acted on, because the suggested path
 would not be an improvement:

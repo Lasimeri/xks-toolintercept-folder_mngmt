@@ -1,5 +1,37 @@
 # Changelog
 
+## 0.4.0 (2026-11-21)
+
+Folders are decided by the model when a tool call makes them, and the
+layout records it.
+
+### Changed
+
+- **The hook records a confident folder reading in the manifest.** When
+  the model reads a folder outside the layout (a new top-level folder, or
+  the unmapped folder a file goes under) as a role the layout lacks, at
+  confidence 0.5 or more, the hook maps that folder to that role in
+  xks-project.json at that moment (an exclusive lock and an atomic
+  rewrite; a mapping is never moved or replaced) and logs it; Claude is
+  told. Measured on a manifest with an empty layout: `mkdir scripts` read
+  as tools at 0.9022 and recorded; the same `mkdir` again allowed by rule
+  in 2 ms.
+- The session-start summary and the hook's notes say plainly when a
+  layout has no folder yet.
+
+### Added
+
+- `Manifest::update_locked` (the locked, atomic manifest rewrite, first
+  written for `extend_layout`) and `Manifest::map_folder` in the library.
+
+### Known
+
+- With no folder mapped yet the model has less to go on: `src/main.rs`
+  in a new command-line project read as tools at 0.4757 (under 0.5, so
+  nothing was recorded). The project's purpose, "a small command line
+  tool", may pull towards the tools role; a calibrated prior from folder
+  names (`src` is source) is the next step.
+
 ## 0.3.1 (2026-11-21)
 
 ### Changed

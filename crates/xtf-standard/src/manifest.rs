@@ -6,6 +6,9 @@
 //! only its own question.
 
 use std::collections::BTreeMap;
+use std::fs::OpenOptions;
+use std::io::Write;
+use std::os::fd::AsRawFd;
 use std::path::{Component, Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
@@ -17,6 +20,17 @@ use crate::roles::Role;
 pub const STANDARD: &str = "xks-folder/1";
 /// The manifest's file name, at the project root.
 pub const MANIFEST_FILE: &str = "xks-project.json";
+/// The lock every writer of a manifest holds, under the project root.
+pub const LAYOUT_LOCK: &str = ".xks/layout.lock";
+
+mod sys {
+    unsafe extern "C" {
+        /// flock(2): `fd` is only read as a number; a bad one is EBADF.
+        pub safe fn flock(fd: i32, operation: i32) -> i32;
+    }
+}
+/// flock(2) LOCK_EX.
+const LOCK_EX: i32 = 2;
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Manifest {
@@ -100,6 +114,82 @@ impl Manifest {
         let path = root.join(MANIFEST_FILE);
         let text = serde_json::to_string_pretty(self).expect("manifest to JSON") + "\n";
         std::fs::write(&path, text).map_err(|e| format!("{}: {e}", path.display()))
+    }
+
+    /// Load the manifest of `root`, let `change` edit it, and write it back,
+    /// holding an exclusive flock(2) on `LAYOUT_LOCK` throughout, so two
+    /// sessions (a hook and an MCP server, or two hooks) changing one
+    /// manifest never lose each other's change. The new text goes to a
+    /// temporary file that replaces the manifest in one rename: a reader
+    /// sees the old manifest or the new one, never a part. The text is what
+    /// `save` writes; when it equals the file's, nothing is written.
+    /// `change` returns its result, or Err to leave the manifest as it was.
+    /// (First written as xtf-mcp's `update_manifest` for `extend_layout`.)
+    pub fn update_locked<T>(
+        root: &Path,
+        change: impl FnOnce(&mut Manifest) -> Result<T, String>,
+    ) -> Result<T, String> {
+        let lock_path = root.join(LAYOUT_LOCK);
+        if let Some(d) = lock_path.parent() {
+            std::fs::create_dir_all(d).map_err(|e| format!("{}: {e}", d.display()))?;
+        }
+        let lock = OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(&lock_path)
+            .map_err(|e| format!("{}: {e}", lock_path.display()))?;
+        loop {
+            if sys::flock(lock.as_raw_fd(), LOCK_EX) == 0 {
+                break;
+            }
+            let e = std::io::Error::last_os_error();
+            if e.kind() != std::io::ErrorKind::Interrupted {
+                return Err(format!("{}: {e}", lock_path.display()));
+            }
+        }
+        let mut m = Manifest::load(root)?;
+        let out = change(&mut m)?;
+        let text = serde_json::to_string_pretty(&m).expect("manifest to JSON") + "\n";
+        let path = root.join(MANIFEST_FILE);
+        if std::fs::read(&path).is_ok_and(|now| now == text.as_bytes()) {
+            return Ok(out);
+        }
+        let tmp = root.join(format!(".{MANIFEST_FILE}.{}.tmp", std::process::id()));
+        // Only the lock holder writes this name (it carries the process id,
+        // and the lock is held), so truncating a leftover of a crashed run
+        // is safe.
+        let written = OpenOptions::new()
+            .write(true)
+            .create(true)
+            .truncate(true)
+            .open(&tmp)
+            .and_then(|mut f| f.write_all(text.as_bytes()).and_then(|()| f.sync_all()))
+            .and_then(|()| std::fs::rename(&tmp, &path));
+        if let Err(e) = written {
+            // The temporary file is this call's own; the manifest is untouched.
+            let _ = std::fs::remove_file(&tmp);
+            return Err(format!("{}: {e}", path.display()));
+        }
+        drop(lock);
+        Ok(out)
+    }
+
+    /// Map `dir` (relative to the root) as `role`, unless the layout maps it
+    /// already, to this role or another (a folder plays one role; a mapping
+    /// is never moved). True when it was added.
+    pub fn map_folder(&mut self, role: Role, dir: &str) -> bool {
+        let dir = dir.trim_matches('/').to_string();
+        if dir.is_empty()
+            || self
+                .layout
+                .values()
+                .flatten()
+                .any(|d| d.trim_matches('/') == dir)
+        {
+            return false;
+        }
+        self.layout.entry(role).or_default().push(dir);
+        true
     }
 
     /// The nearest directory at or above `path` holding a manifest.
@@ -255,5 +345,53 @@ mod tests {
         assert!(!roles.contains(&Role::Assets));
         let back: Manifest = serde_json::from_str(&serde_json::to_string(&m).unwrap()).unwrap();
         assert_eq!(back, m);
+    }
+
+    #[test]
+    fn a_folder_is_mapped_once_and_never_moved() {
+        let mut m = Manifest::new("demo", "A demo.", vec!["rust".into()]);
+        m.layout.clear();
+        assert!(m.map_folder(Role::Tools, "scripts/"));
+        assert_eq!(m.layout[&Role::Tools], ["scripts"]);
+        // The same folder again, to the same role or another: refused.
+        assert!(!m.map_folder(Role::Tools, "scripts"));
+        assert!(!m.map_folder(Role::Source, "scripts"));
+        assert!(!m.map_folder(Role::Docs, ""));
+        assert!(m.map_folder(Role::Tools, "bin"));
+        assert_eq!(m.layout[&Role::Tools], ["scripts", "bin"]);
+    }
+
+    #[test]
+    fn concurrent_locked_updates_lose_nothing() {
+        let root = std::env::temp_dir().join(format!("xtf-std-lock-{}", std::process::id()));
+        std::fs::create_dir_all(&root).unwrap();
+        let mut m = Manifest::new("demo", "A demo.", vec!["rust".into()]);
+        m.layout.clear();
+        m.save(&root).unwrap();
+        let threads: Vec<_> = (0..8)
+            .map(|i| {
+                let root = root.clone();
+                std::thread::spawn(move || {
+                    Manifest::update_locked(&root, |m| {
+                        Ok(m.map_folder(Role::Data, &format!("d{i}")))
+                    })
+                    .unwrap()
+                })
+            })
+            .collect();
+        assert!(threads.into_iter().all(|t| t.join().unwrap()));
+        let after = Manifest::load(&root).unwrap();
+        let mut got = after.layout[&Role::Data].clone();
+        got.sort();
+        let want: Vec<String> = (0..8).map(|i| format!("d{i}")).collect();
+        assert_eq!(got, want);
+        // A change that fails leaves the file as it was.
+        let before = std::fs::read(root.join(MANIFEST_FILE)).unwrap();
+        let r: Result<(), String> = Manifest::update_locked(&root, |m| {
+            m.map_folder(Role::Docs, "docs");
+            Err("refused".into())
+        });
+        assert!(r.is_err());
+        assert_eq!(std::fs::read(root.join(MANIFEST_FILE)).unwrap(), before);
     }
 }

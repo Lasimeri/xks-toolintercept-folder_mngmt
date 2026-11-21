@@ -204,7 +204,7 @@ pub fn run(ev: &Event, mode: Mode, errors: &mut Vec<String>) -> Option<Value> {
             // A change of the layout alone (a folder or file outside the
             // layout read as a role the layout lacks) never blocks: the
             // operation is fine where it is, the manifest is what to extend.
-            None => notes.extend(layout_note(ask, &d)),
+            None => notes.extend(record_layout(ask, &d, errors)),
         }
         notes.extend(name_note(ask, &d));
     }
@@ -316,6 +316,10 @@ fn outside_note(
 
 /// The layout as one line: `source: crates; docs: docs; ...`.
 fn layout_text(m: &Manifest) -> String {
+    if m.layout.is_empty() {
+        // A new project's layout starts empty and grows folder by folder.
+        return "no folder mapped yet".into();
+    }
     m.layout
         .iter()
         .map(|(r, dirs)| format!("{}: {}", r.key(), dirs.join(", ")))
@@ -485,33 +489,71 @@ fn suggestion(ask: &Ask, d: &Decision) -> Option<String> {
     ))
 }
 
-/// `file.name_clear` at or below the policy's threshold: the name may not
-/// say what the file holds.
 /// A layout change with no move (a folder outside the layout, or the
 /// unmapped top-level folder a file goes under, read with confidence as a
-/// role the layout lacks): context, never a denial.
-fn layout_note(ask: &Ask, d: &Decision) -> Option<String> {
+/// role the layout lacks): the model decided where that folder belongs, at
+/// the moment it is created, so the hook records it in the manifest
+/// (`Manifest::update_locked`, `map_folder`: never moves or replaces a
+/// mapping) and logs the recording. Never a denial. When the recording
+/// fails, the change is given as context only and the error logged.
+fn record_layout(ask: &Ask, d: &Decision, errors: &mut Vec<String>) -> Option<String> {
     let lc = d.verdict.layout_change.as_ref()?;
     let p = &ask.projection;
-    Some(format!(
-        "xks-folder/1, project `{}`: new {} `{}`: the model reads it as {} (confidence {:.2}), \
-         a role the project's layout does not have; `{}/` would play it: `\"{}\": [\"{}\"]` in \
-         xks-project.json maps it.",
-        ask.manifest.name,
-        if p.op == Op::CreateDir {
-            "folder"
-        } else {
-            "file"
-        },
-        p.path,
-        lc.role,
-        d.verdict.confidence.unwrap_or(0.0),
-        lc.dir,
-        lc.role,
-        lc.dir
-    ))
+    let what = if p.op == Op::CreateDir {
+        "folder"
+    } else {
+        "file"
+    };
+    let conf = d.verdict.confidence.unwrap_or(0.0);
+    let head = format!(
+        "xks-folder/1, project `{}`: new {what} `{}`: the model reads it as {} (confidence {conf:.2}), \
+         a role the project's layout did not have",
+        ask.manifest.name, p.path, lc.role
+    );
+    let recorded = Role::from_key(&lc.role)
+        .ok_or_else(|| format!("unknown role `{}`", lc.role))
+        .and_then(|role| Manifest::update_locked(&ask.root, |m| Ok(m.map_folder(role, &lc.dir))));
+    match recorded {
+        Ok(true) => {
+            let kept = Decision {
+                verdict: Verdict {
+                    action: Action::Allow,
+                    notes: vec![format!(
+                        "recorded by the xtf hook: `{}/` plays {} (the model, confidence {conf:.2})",
+                        lc.dir, lc.role
+                    )],
+                    suggested_path: None,
+                    role: Some(lc.role.clone()),
+                    confidence: Some(conf),
+                    layout_change: Some(lc.clone()),
+                },
+                answers: Map::new(),
+                seconds: 0.0,
+            };
+            if let Err(e) = decide::log(&ask.root, p, &kept) {
+                errors.push(format!("decision log under {}: {e}", ask.root.display()));
+            }
+            Some(format!(
+                "{head}; recorded in xks-project.json: `{}/` now plays {}.",
+                lc.dir, lc.role
+            ))
+        }
+        // Mapped already (by another session in between, or to another
+        // role): nothing to say.
+        Ok(false) => None,
+        Err(e) => {
+            errors.push(format!("{}: recording the layout: {e}", ask.root.display()));
+            Some(format!(
+                "{head}; `\"{}\": [\"{}\"]` in xks-project.json maps it (the hook could not \
+                 record it).",
+                lc.role, lc.dir
+            ))
+        }
+    }
 }
 
+/// `file.name_clear` at or below the policy's threshold: the name may not
+/// say what the file holds.
 fn name_note(ask: &Ask, d: &Decision) -> Option<String> {
     let at = Thresholds::default().name_unclear_at;
     let v = d.answers.get(catalog::FILE_NAME_CLEAR)?;

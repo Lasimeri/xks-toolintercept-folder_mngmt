@@ -241,7 +241,15 @@ In order, for each projected operation:
   top-level folder, or the unmapped top-level folder a file goes under, is
   mapped as that role where it is; a file at the root goes to the role's
   usual folder (`Role::default_dir`), mapped as well. The standard only
-  suggests it; writing the manifest is the caller's.
+  suggests it; writing the manifest is the caller's. The Claude Code hook
+  (since 0.4.0) records a change that maps a folder where it is (a new
+  folder, or the unmapped folder a file goes under) at the moment a tool
+  call creates it, with `Manifest::update_locked` and `map_folder` (an
+  exclusive lock, an atomic rewrite, a mapping never moved or replaced) and
+  a line in the decision record; a root file's change comes with a move and
+  stays a suggestion. So a new project's layout can start empty and grow
+  one folder at a time, each folder's role read by the model when it is
+  made.
 - Below it: uncertain; nothing is suggested.
 - `file.name_clear` P(yes) at or below **0.3** (TypeSafe's "no" threshold):
   uncertain, and the agent is told to offer candidates to `name.pick`.

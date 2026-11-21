@@ -11,15 +11,16 @@ becomes the same fixed, typed question, answered by a System One model
 (TypeSafe's Jev, or a local Jev-like model), acted on only when the model is
 confident, and written down.
 
-**Status: 0.3.0.** The standard ([xks-folder/1](SPEC.md)), its Rust
+**Status: 0.4.0.** The standard ([xks-folder/1](SPEC.md)), its Rust
 library and `xtf` command line, its calibration on six real repositories,
 and the **Claude Code plugin** that puts it in front of every session
-automatically: a hook on every new file and folder, an MCP server with five
-tools (new projects and their folder structure among them), and one shared
-model instance as a user service ([Claude Code](#claude-code)). New in
-0.3.0: a new top-level folder or a file outside the layout is asked against
-every role it can play, and a confident role the layout lacks becomes a
-suggested layout change, so the project's layout grows with it.
+automatically: a hook on every new file and folder, an MCP server (new
+projects, placements, whole planned trees, names, layout changes), and one
+shared model instance as a user service ([Claude Code](#claude-code)). A
+folder outside the layout is read by the model against every role it can
+play when a tool call creates it, and since 0.4.0 the hook records a
+confident reading in the manifest: the layout grows one folder at a time,
+decided by the model, not laid out up front.
 
 ## How a decision is made
 

@@ -78,12 +78,15 @@ fn summary(m: &Manifest, root: &Path, mode: Mode) -> String {
     if m.purpose.chars().count() > PURPOSE_CHARS {
         purpose.push_str(" (cut)");
     }
-    let layout = m
-        .layout
-        .iter()
-        .map(|(r, dirs)| format!("{}: {}", r.key(), dirs.join(", ")))
-        .collect::<Vec<_>>()
-        .join("; ");
+    let layout = if m.layout.is_empty() {
+        "no folder mapped yet (a new project's layout grows folder by folder)".to_string()
+    } else {
+        m.layout
+            .iter()
+            .map(|(r, dirs)| format!("{}: {}", r.key(), dirs.join(", ")))
+            .collect::<Vec<_>>()
+            .join("; ")
+    };
     let style = |s: xtf_standard::naming::Style| {
         serde_json::to_value(s)
             .ok()
@@ -113,9 +116,11 @@ fn summary(m: &Manifest, root: &Path, mode: Mode) -> String {
          Naming: source files {}, new folders {}. Never decided on: {ignore}the out and \
          third_party folders.\n\
          The xtf hook (mode {}) decides new files (Write) and new folders (mkdir in Bash) \
-         against this layout, rules first and then the decision server's model; {acting}. The \
-         xtf MCP tools place_file, plan_tree, pick_name and new_project answer placement, layout \
-         and naming questions against the same standard.",
+         against this layout, rules first and then the decision server's model; {acting}. A \
+         new top-level folder the layout does not map is read by the model when a tool call \
+         creates it, and a confident reading is recorded in xks-project.json. The xtf MCP tools \
+         place_file, plan_tree, pick_name and new_project answer placement, layout and naming \
+         questions against the same standard.",
         m.name,
         root.display(),
         style(m.naming.files),
