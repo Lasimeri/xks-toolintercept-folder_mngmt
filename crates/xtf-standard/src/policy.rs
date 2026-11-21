@@ -48,8 +48,17 @@ pub enum Action {
     Allow,
     /// The model could not tell; nothing is suggested.
     Uncertain,
-    /// A different path is suggested (`suggested_path`).
+    /// A different path (`suggested_path`), a change of the layout
+    /// (`layout_change`), or both, are suggested.
     Suggest,
+}
+
+/// A mapping the manifest's `layout` lacks: `dir` (relative to the root)
+/// plays `role`. Suggested, never written by the standard itself.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct LayoutChange {
+    pub role: String,
+    pub dir: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize)]
@@ -64,6 +73,11 @@ pub struct Verdict {
     pub role: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub confidence: Option<f64>,
+    /// The layout mapping that would make the chosen role a folder of the
+    /// project (since 0.3.0): a confident role the layout lacks, for a path
+    /// outside the layout.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub layout_change: Option<LayoutChange>,
 }
 
 impl Verdict {
@@ -74,6 +88,7 @@ impl Verdict {
             suggested_path: None,
             role: None,
             confidence: None,
+            layout_change: None,
         }
     }
 }
@@ -150,9 +165,11 @@ pub fn decide(
         suggested_path: None,
         role: None,
         confidence: None,
+        layout_change: None,
     };
     let name = p.name();
-    let mut dir = parent(&p.path).to_string();
+    let here = parent(&p.path).to_string();
+    let mut dir = here.clone();
     if styled != name {
         v.action = Action::Suggest;
         v.notes.push(format!(
@@ -177,11 +194,42 @@ pub fn decide(
             (Place::Role(r), Some(c)) => *r == c,
             _ => false,
         };
-        if fits {
+        let sure = *confidence >= th.root_min_confidence;
+        let lacking =
+            chosen.filter(|c| !matches!(c, Role::Config | Role::Out) && !m.layout.contains_key(c));
+        if fits && sure {
             v.notes.push(format!(
                 "it belongs in {choice} (confidence {confidence:.2})"
             ));
-        } else if *confidence >= th.root_min_confidence {
+        } else if fits {
+            v.notes.push(format!(
+                "stays in {choice}: the model leans the same way (confidence {confidence:.2})"
+            ));
+        } else if let (true, Some(c)) = (sure, lacking) {
+            // A role the layout lacks (a path outside the layout, whose
+            // options are not limited to the layout's): the layout is what
+            // changes. A folder outside the layout, or the top-level folder
+            // a file goes under, is mapped as that role where it is; a file
+            // at the root goes to the role's usual folder, mapped as well.
+            let top = match &place {
+                Place::Unmapped(top) => Some(top.clone()),
+                Place::Root if p.op == Op::CreateDir => Some(p.path.trim_matches('/').to_string()),
+                _ => None,
+            };
+            let map_dir = top.unwrap_or_else(|| {
+                dir = c.default_dir().to_string();
+                dir.clone()
+            });
+            v.notes.push(format!(
+                "it reads as {choice} (confidence {confidence:.2}); the layout has no {choice} \
+                 folder: `{map_dir}/` would play that role"
+            ));
+            v.layout_change = Some(LayoutChange {
+                role: choice.clone(),
+                dir: map_dir,
+            });
+            v.action = Action::Suggest;
+        } else if sure {
             let target = chosen.map(|c| m.dir_for(c)).unwrap_or_else(|| ".".into());
             v.notes.push(format!(
                 "it belongs in {choice} ({}), not where it is going (confidence {confidence:.2})",
@@ -208,7 +256,7 @@ pub fn decide(
             v.action = v.action.max(Action::Uncertain);
         }
     }
-    if v.action == Action::Suggest {
+    if v.action == Action::Suggest && (dir != here || styled != name) {
         v.suggested_path = Some(join(&dir, styled));
     }
     v
@@ -332,5 +380,49 @@ mod tests {
             &th,
         );
         assert_eq!(top.suggested_path.as_deref(), Some("docs/notes.md"));
+    }
+
+    #[test]
+    fn a_confident_role_the_layout_lacks_changes_the_layout() {
+        let mut m = Manifest::new("demo", "A demo.", vec!["rust".into()]);
+        m.layout.clear();
+        m.layout.insert(Role::Source, vec!["crates".into()]);
+        m.layout.insert(Role::Docs, vec!["docs".into()]);
+        let th = Thresholds::default();
+        let ask = |op: Op, path: &str, role: &str, conf: f64| {
+            let p = proj(op, path);
+            decide(&m, &p, p.name(), Some(&choice(role, conf)), None, &th)
+        };
+        let change = |role: &str, dir: &str| {
+            Some(LayoutChange {
+                role: role.into(),
+                dir: dir.into(),
+            })
+        };
+        // A new top-level folder: mapped where it is, never moved.
+        let d = ask(Op::CreateDir, "scripts", "tools", 0.7);
+        assert_eq!(d.action, Action::Suggest);
+        assert_eq!(d.suggested_path, None);
+        assert_eq!(d.layout_change, change("tools", "scripts"));
+        // A file under an unmapped top-level folder: the folder is mapped.
+        let d = ask(Op::CreateFile, "scripts/build.sh", "tools", 0.7);
+        assert_eq!(d.suggested_path, None);
+        assert_eq!(d.layout_change, change("tools", "scripts"));
+        // A file at the root: the role's usual folder, mapped as well.
+        let d = ask(Op::CreateFile, "bench.sh", "tools", 0.7);
+        assert_eq!(d.suggested_path.as_deref(), Some("tools/bench.sh"));
+        assert_eq!(d.layout_change, change("tools", "tools"));
+        // A role the layout has: moved into it, the layout untouched.
+        let d = ask(Op::CreateFile, "scripts/guide.md", "docs", 0.7);
+        assert_eq!(d.suggested_path.as_deref(), Some("docs/guide.md"));
+        assert_eq!(d.layout_change, None);
+        // Unsure: nothing changes.
+        let d = ask(Op::CreateDir, "scripts", "tools", 0.3);
+        assert_eq!(d.action, Action::Uncertain);
+        assert_eq!(d.layout_change, None);
+        // Where it is going, under the floor: says it stays, claims no more.
+        let d = ask(Op::CreateFile, "crates/a/x.rs", "source", 0.45);
+        assert_eq!(d.action, Action::Allow);
+        assert!(d.notes[0].starts_with("stays in source: the model leans the same way"));
     }
 }

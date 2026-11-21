@@ -11,12 +11,15 @@ becomes the same fixed, typed question, answered by a System One model
 (TypeSafe's Jev, or a local Jev-like model), acted on only when the model is
 confident, and written down.
 
-**Status: 0.2.0.** The standard ([xks-folder/1](SPEC.md)), its Rust
+**Status: 0.3.0.** The standard ([xks-folder/1](SPEC.md)), its Rust
 library and `xtf` command line, its calibration on six real repositories,
-and, new in 0.2.0, the **Claude Code plugin** that puts it in front of every
-session automatically: a hook on every new file and folder, an MCP server
-with five tools (new projects and their folder structure among them), and
-one shared model instance as a user service ([Claude Code](#claude-code)).
+and the **Claude Code plugin** that puts it in front of every session
+automatically: a hook on every new file and folder, an MCP server with five
+tools (new projects and their folder structure among them), and one shared
+model instance as a user service ([Claude Code](#claude-code)). New in
+0.3.0: a new top-level folder or a file outside the layout is asked against
+every role it can play, and a confident role the layout lacks becomes a
+suggested layout change, so the project's layout grows with it.
 
 ## How a decision is made
 
@@ -236,12 +239,14 @@ if decision.verdict.action == Action::Suggest {
   sessions deciding at once queue behind each other (three at once: 4.2 to
   5.7 s each). A hook that waits past 15 s lets its operation through
   undecided; that takes about five decisions arriving together, or one
-  behind a long `plan_tree` (requests carry at most 8 questions, so none
-  holds the server longer than about 10 s).
-- **Folders are judged by name.** `file.root` sees a new path's name and
-  summary, not the folder it is about to go in, and the folders decided so
-  far (with only a name and the shell command's description to go on) all
-  stayed under 0.5 confidence.
+  behind a long `plan_tree` request. Requests carry at most 4 questions:
+  measured 7.6 s and 10.6 s for two of them (the second with a 12-option
+  folder question), so a hook queued behind one has about 4 s to spare.
+- **Inside a mapped folder, a new folder is judged by its name.** A new
+  top-level folder is asked against every role and can be confident
+  (`scripts/` read as tools at 0.92, and the layout change offered), but a
+  new folder inside `src/` or `docs/` has only its name and the shell
+  command's description to go on, and those answers stayed under 0.5.
 - **Local sessions only.** Claude Code's cloud sessions do not read the
   local `~/.claude`, and the server listens on 127.0.0.1.
 - **Text only.** Images and binary files are not read.

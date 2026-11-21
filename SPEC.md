@@ -131,8 +131,9 @@ The options of every placement question, in this order, worded exactly so:
 | out | generated output: builds, logs, caches, run results (never tracked) |
 | config | project-level files at the top: build manifest, README, licences, ignore files, settings |
 
-A question offers the roles of the project's layout plus `out` and `config`,
-narrowed for a file by two fixed rules of the standard (`roles.rs`):
+Inside the layout (a path under a folder the manifest maps), a question
+offers the roles of the project's layout plus `out` and `config`, narrowed
+for a file by two fixed rules of the standard (`roles.rs`):
 
 - **its name**, when a convention shared across languages gives the role:
   `test_*`, `*_test.*`, `*_tests.*`, `*.test.*`, `*_spec.*`, `*.spec.*` are
@@ -152,6 +153,17 @@ narrowed for a file by two fixed rules of the standard (`roles.rs`):
   `out` (`.log`) settles a file there. (Since 0.2.0; no item of the
   calibration set is affected: its seven rule-settled files are five test or
   benchmark names and two `.log` files.)
+
+Outside the layout (a file at the root that is not a conventional one, or a
+path under a top-level folder the manifest does not map; since 0.3.0), the
+question is what the path is, not which of the layout's folders it goes to,
+so the options are not limited to the layout's roles: a new folder is
+offered every role but `config`; a file the role its name gives, else the
+roles its extension makes plausible with `out` and `config` (`out` alone
+for `.log`), else all thirteen. A confident answer naming a role the layout
+lacks becomes a layout change (Policy). No item of the calibration set lies
+outside its layout (all 141 are under mapped folders or conventional root
+files), so the calibration figures are unchanged by it.
 
 ## Question catalog
 
@@ -218,10 +230,18 @@ In order, for each projected operation:
 
 ## Policy (answers into actions)
 
-- `file.root` chose the role the path already plays: allow.
+- `file.root` chose the role the path already plays: allow (below 0.5 the
+  note says only that the path stays and the model leans the same way).
 - It chose another role with Choice confidence at or above **0.5**
   (`root_min_confidence`, TypeSafe's floor for "genuinely unsure", and the
   calibrated value below): suggest `<that role's first directory>/<name>`.
+- It chose, at or above 0.5, a role the layout lacks (only possible outside
+  the layout; since 0.3.0): suggest a **layout change**
+  (`layout_change: {role, dir}` in the verdict) instead of a move. A new
+  top-level folder, or the unmapped top-level folder a file goes under, is
+  mapped as that role where it is; a file at the root goes to the role's
+  usual folder (`Role::default_dir`), mapped as well. The standard only
+  suggests it; writing the manifest is the caller's.
 - Below it: uncertain; nothing is suggested.
 - `file.name_clear` P(yes) at or below **0.3** (TypeSafe's "no" threshold):
   uncertain, and the agent is told to offer candidates to `name.pick`.

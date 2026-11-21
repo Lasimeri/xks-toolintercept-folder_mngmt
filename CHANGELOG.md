@@ -1,5 +1,39 @@
 # Changelog
 
+## 0.3.0 (2026-11-21)
+
+The layout grows with the project: paths outside it are asked what they
+are, and a confident answer the layout has no folder for becomes a
+suggested layout change.
+
+### Changed
+
+- **Outside the layout** (a non-conventional file at the root, or a path
+  under a top-level folder the manifest does not map), `file.root` offers
+  the roles the path can play, not only the layout's: a new folder every
+  role but config, a file the roles its name or extension makes plausible
+  with out and config. Before, `scripts/release.sh` in a layout without a
+  tools folder was offered only tests and out, and was confidently
+  suggested to `out/` (0.83). Live on the same 12-path plan: `scripts/` is
+  now read as tools at 0.89 (was source 0.26), `bench.sh` as tools 0.49
+  (was out 0.15).
+- **Layout changes**: a confident role the layout lacks gives
+  `layout_change: {role, dir}` in the verdict (the folder mapped where it
+  is, or a root file's role folder), never a move of the folder. The hook
+  adds it as context and never blocks on it: `mkdir scripts` read as tools
+  at 0.92 was let through with `"tools": ["scripts"]` named.
+- **Requests to the server carry at most 4 questions** (was 8): a real
+  8-question request held the one server 14.1 s, so a hook queued behind it
+  had no time left of its 15 s. Measured with 4: 7.6 s and 10.6 s (the
+  second with a 12-option folder question).
+- Under the 0.5 floor, a path whose role the model agrees with is said to
+  stay, not to belong ("stays in source: the model leans the same way").
+
+### Added
+
+- `roles::by_folder_name`, the folder-name convention table `xtf init`
+  uses, in the library.
+
 ## 0.2.0 (2026-11-21)
 
 Claude Code, automatic in every session: the standard in front of every new

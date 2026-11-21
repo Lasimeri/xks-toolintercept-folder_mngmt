@@ -814,6 +814,7 @@ fn new_project(a: &Args) -> Result<Outcome, String> {
                 suggested_path: None,
                 role: None,
                 confidence: Some(*confidence),
+                layout_change: None,
             },
             answers,
             seconds: *seconds,

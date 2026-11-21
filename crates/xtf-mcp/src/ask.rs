@@ -45,10 +45,11 @@ const GRACE: f64 = 3.0;
 /// (xtf-hook's `MODEL_BUDGET`). Measured with 32: a 32-question request held
 /// the server 41.5 s (1.30 s a question), and the two hook requests queued
 /// behind it were answered after their clients had gone. With 8 a request
-/// holds it about 10.4 s, plus up to 1.15 s to read the state again when
-/// another session's request came between (measured), so a hook that
-/// queues behind one is still answered within its 15 s.
-pub const MAX_QUESTIONS: usize = 8;
+/// measured 14.1 s and 14.8 s in a real plan_tree (8 questions, 2,908 input
+/// tokens, 2026-11-21), which leaves a hook queued behind it no time inside
+/// its 15 s; with 4 a request holds the server about half that, so a hook
+/// queued behind one still gets its own decision within the budget.
+pub const MAX_QUESTIONS: usize = 4;
 /// Token budget of one request: TypeSafe's documented per-request context
 /// (64,000 tokens, jevbase `Limits::DEFAULT`) with a quarter kept as margin
 /// for the estimate (`state_tokens`, `question_tokens`). A request the
@@ -245,7 +246,12 @@ mod tests {
         };
         let small: Vec<_> = (0..70).map(q).collect();
         let sizes: Vec<usize> = chunks("state", small).iter().map(Vec::len).collect();
-        assert_eq!(sizes, [8, 8, 8, 8, 8, 8, 8, 8, 6]);
+        // Full requests of MAX_QUESTIONS, then the rest.
+        let mut want = vec![MAX_QUESTIONS; 70 / MAX_QUESTIONS];
+        if 70 % MAX_QUESTIONS != 0 {
+            want.push(70 % MAX_QUESTIONS);
+        }
+        assert_eq!(sizes, want);
         // Questions of about 20,000 bytes (about 20,100 estimated tokens): two fit
         // the 48,000-token budget with the state, the third starts a request.
         let big = |n: usize| {

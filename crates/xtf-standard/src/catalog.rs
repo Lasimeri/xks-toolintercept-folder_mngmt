@@ -15,9 +15,11 @@
 //! (`Manifest::state`), so a running server reuses it from one decision to
 //! the next.
 
+use std::path::Path;
+
 use serde_json::{Map, Value, json};
 
-use crate::manifest::Manifest;
+use crate::manifest::{Manifest, Place};
 use crate::projection::{Op, Projection};
 use crate::roles::{self, Role};
 
@@ -81,20 +83,33 @@ fn subject(p: &Projection) -> String {
     }
 }
 
-/// The roles `file.root` offers: the project's (its layout's, `out`,
-/// `config`). For a file: the one its name gives by convention
-/// (`roles::by_name`, a test or benchmark file) when the layout has it;
-/// else those its extension makes plausible (`roles::plausible`), `out`
-/// always kept. One role left means a rule decides and the question is not
-/// asked.
+/// The roles `file.root` offers. One role left means a rule decides and the
+/// question is not asked.
 ///
-/// `out` is offered beside the plausible roles, never chosen for want of
-/// them: when the layout has none of the roles the extension allows (a
-/// script in a project without tools, tests, integrations or examples
-/// folders), the extension says nothing about this project and every role
-/// is offered. Only an extension whose one role is `out` (`.log`) settles a
-/// file there.
+/// Inside the layout (a path under a folder the manifest maps): the
+/// project's roles (its layout's, `out`, `config`). For a file: the one its
+/// name gives by convention (`roles::by_name`, a test or benchmark file)
+/// when the layout has it; else those its extension makes plausible
+/// (`roles::plausible`), `out` always kept. `out` is offered beside the
+/// plausible roles, never chosen for want of them: when the layout has
+/// none of the roles the extension allows (a script in a project without
+/// tools, tests, integrations or examples folders), the extension says
+/// nothing about this project and every role is offered. Only an extension
+/// whose one role is `out` (`.log`) settles a file there.
+///
+/// Outside the layout (a file at the root that is not a conventional one,
+/// or a path under a top-level folder the manifest does not map;
+/// `outside_options`): the question is what the path is, not which of the
+/// layout's folders it goes to, so the roles are not limited to the
+/// layout's. A confident role the layout lacks becomes a layout change
+/// (`policy::decide`).
 pub fn root_options(m: &Manifest, p: &Projection) -> Vec<Role> {
+    if matches!(
+        m.place(Path::new(&p.path)),
+        Place::Root | Place::Unmapped(_)
+    ) {
+        return outside_options(p);
+    }
     let roles = m.roles();
     if p.op == Op::CreateDir {
         return roles;
@@ -115,6 +130,33 @@ pub fn root_options(m: &Manifest, p: &Projection) -> Vec<Role> {
         return roles;
     }
     narrowed
+}
+
+/// The roles offered for a path outside the layout (since 0.3.0): a new
+/// folder, every role but `config` (the root's own); a file, the role its
+/// name gives by convention, else the roles its extension makes plausible
+/// with `out` and `config` beside them (`out` alone for an extension that
+/// means generated output), else, for an extension that says nothing, all
+/// thirteen. The layout's own roles do not narrow them: the layout is what
+/// the answer may extend.
+fn outside_options(p: &Projection) -> Vec<Role> {
+    if p.op == Op::CreateDir {
+        return Role::ALL
+            .into_iter()
+            .filter(|r| *r != Role::Config)
+            .collect();
+    }
+    if let Some(r) = roles::by_name(p.name()) {
+        return vec![r];
+    }
+    match roles::plausible(p.name()) {
+        None => Role::ALL.to_vec(),
+        Some(ok) if ok.iter().all(|r| *r == Role::Out) => vec![Role::Out],
+        Some(ok) => Role::ALL
+            .into_iter()
+            .filter(|r| ok.contains(r) || matches!(r, Role::Out | Role::Config))
+            .collect(),
+    }
 }
 
 /// `file.root`: which of `root_options` the new file or folder plays.
@@ -215,18 +257,53 @@ mod tests {
             summary: String::new(),
             tool: None,
         };
-        // A script: none of tools, tests, integrations, examples in the
-        // layout, so the extension says nothing here: every role is offered.
-        assert_eq!(
-            root_options(&m, &file("calibration/make-set.sh")),
-            m.roles()
-        );
+        // Inside the layout (under `crates`, mapped). A script: none of
+        // tools, tests, integrations, examples in the layout, so the
+        // extension says nothing here: every role is offered.
+        assert_eq!(root_options(&m, &file("crates/make-set.sh")), m.roles());
         // A log: its extension means generated output, so out settles it.
-        assert_eq!(root_options(&m, &file("run.log")), [Role::Out]);
+        assert_eq!(root_options(&m, &file("crates/run.log")), [Role::Out]);
         // Source code: the plausible roles the layout has, and out.
         assert_eq!(
             root_options(&m, &file("crates/a/src/x.rs")),
             [Role::Source, Role::Out]
         );
+    }
+
+    #[test]
+    fn outside_the_layout_the_options_are_not_the_layouts() {
+        let mut m = Manifest::new("demo", "A demo.", vec!["rust".into()]);
+        m.layout.clear();
+        m.layout.insert(Role::Source, vec!["crates".into()]);
+        m.layout.insert(Role::Docs, vec!["docs".into()]);
+        let at = |op: Op, path: &str| {
+            root_options(
+                &m,
+                &Projection {
+                    op,
+                    path: path.into(),
+                    from: None,
+                    summary: String::new(),
+                    tool: None,
+                },
+            )
+        };
+        use Role::*;
+        let script = [Tests, Examples, Tools, Integrations, Out, Config];
+        // A script at the root or under an unmapped folder: tools offered
+        // although the layout has none.
+        assert_eq!(at(Op::CreateFile, "bench.sh"), script);
+        assert_eq!(at(Op::CreateFile, "scripts/build.sh"), script);
+        // A new top-level folder: every role but config.
+        let dir = at(Op::CreateDir, "scripts");
+        assert_eq!(dir.len(), 12);
+        assert!(!dir.contains(&Config));
+        // A test name outside the layout: the convention decides.
+        assert_eq!(at(Op::CreateFile, "test_cli.py"), [Tests]);
+        // A log: out alone; an extension that says nothing: all thirteen.
+        assert_eq!(at(Op::CreateFile, "run.log"), [Out]);
+        assert_eq!(at(Op::CreateFile, "NOTES.xyz").len(), 13);
+        // Inside the layout nothing changed.
+        assert_eq!(at(Op::CreateFile, "crates/a/x.rs"), [Source, Out]);
     }
 }

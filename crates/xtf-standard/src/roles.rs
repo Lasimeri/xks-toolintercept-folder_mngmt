@@ -178,6 +178,31 @@ pub fn by_name(name: &str) -> Option<Role> {
     None
 }
 
+/// The role a folder's name usually plays (`src`, `scripts`, `vendor`,
+/// ...), or None for a name with no usual role. `xtf init` maps a
+/// project's existing top-level folders with it; the MCP server reports
+/// layout gaps with it. A convention table, never a decision: a folder in
+/// the layout plays the role the manifest gives it.
+pub fn by_folder_name(dir: &str) -> Option<Role> {
+    let r = match dir.to_ascii_lowercase().as_str() {
+        "src" | "lib" | "crates" | "cli" | "tui" | "app" | "cmd" | "pkg" | "internal" | "csrc"
+        | "backends" => Role::Source,
+        "include" => Role::Include,
+        "tests" | "test" | "spec" => Role::Tests,
+        "benches" | "benchmarks" | "bench" => Role::Benches,
+        "examples" | "example" | "samples" => Role::Examples,
+        "docs" | "doc" | "reports" | "notes" => Role::Docs,
+        "tools" | "scripts" => Role::Tools,
+        "integrations" | "plugins" | "hooks" | "contrib" => Role::Integrations,
+        "data" | "evidence" | "datasets" => Role::Data,
+        "assets" | "static" | "public" | "images" => Role::Assets,
+        "third_party" | "vendor" | "external" | "deps" => Role::ThirdParty,
+        "out" | "build" | "dist" => Role::Out,
+        _ => return None,
+    };
+    Some(r)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

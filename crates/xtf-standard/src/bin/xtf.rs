@@ -8,7 +8,7 @@ use jevbase::Client;
 use jevbase::protocol::{Answer, Request};
 use serde_json::{Map, Value, json};
 use xtf_standard::{
-    Decider, MANIFEST_FILE, Manifest, Op, Projection, Role, catalog, decide, naming,
+    Decider, MANIFEST_FILE, Manifest, Op, Projection, Role, catalog, decide, naming, roles,
 };
 
 const HELP: &str = "\
@@ -107,27 +107,6 @@ fn run(args: Vec<String>) -> Result<(), String> {
     }
 }
 
-/// The role a folder name usually plays, when it is a common one.
-fn known_role(dir: &str) -> Option<Role> {
-    let r = match dir.to_ascii_lowercase().as_str() {
-        "src" | "lib" | "crates" | "cli" | "tui" | "app" | "cmd" | "pkg" | "internal" | "csrc"
-        | "backends" => Role::Source,
-        "include" => Role::Include,
-        "tests" | "test" | "spec" => Role::Tests,
-        "benches" | "benchmarks" | "bench" => Role::Benches,
-        "examples" | "example" | "samples" => Role::Examples,
-        "docs" | "doc" | "reports" | "notes" => Role::Docs,
-        "tools" | "scripts" => Role::Tools,
-        "integrations" | "plugins" | "hooks" | "contrib" => Role::Integrations,
-        "data" | "evidence" | "datasets" => Role::Data,
-        "assets" | "static" | "public" | "images" => Role::Assets,
-        "third_party" | "vendor" | "external" | "deps" => Role::ThirdParty,
-        "out" | "build" | "dist" => Role::Out,
-        _ => return None,
-    };
-    Some(r)
-}
-
 fn init(
     dir: &Path,
     name: Option<String>,
@@ -161,7 +140,7 @@ fn init(
         .collect();
     entries.sort();
     for d in entries {
-        match known_role(&d) {
+        match roles::by_folder_name(&d) {
             Some(r) => found.entry(r).or_default().push(d),
             None => unknown.push(d),
         }

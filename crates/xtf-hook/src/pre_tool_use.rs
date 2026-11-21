@@ -196,11 +196,15 @@ pub fn run(ev: &Event, mode: Mode, errors: &mut Vec<String>) -> Option<Value> {
         if let Err(e) = decide::log(&ask.root, &ask.projection, &d) {
             errors.push(format!("decision log under {}: {e}", ask.root.display()));
         }
-        if let Some(text) = suggestion(ask, &d) {
-            match mode {
+        match suggestion(ask, &d) {
+            Some(text) => match mode {
                 Mode::Enforce => denies.push((ask.abs.clone(), text)),
                 _ => notes.push(text),
-            }
+            },
+            // A change of the layout alone (a folder or file outside the
+            // layout read as a role the layout lacks) never blocks: the
+            // operation is fine where it is, the manifest is what to extend.
+            None => notes.extend(layout_note(ask, &d)),
         }
         notes.extend(name_note(ask, &d));
     }
@@ -461,6 +465,12 @@ fn suggestion(ask: &Ask, d: &Decision) -> Option<String> {
              `{new_name}` does"
         ));
     }
+    if let Some(lc) = &v.layout_change {
+        why.push(format!(
+            "the layout has no {} folder yet: `\"{}\": [\"{}\"]` in xks-project.json maps it",
+            lc.role, lc.role, lc.dir
+        ));
+    }
     Some(format!(
         "xks-folder/1, project `{}`: new {} `{}`: {}. Suggested path: `{path}` ({}).",
         m.name,
@@ -477,6 +487,31 @@ fn suggestion(ask: &Ask, d: &Decision) -> Option<String> {
 
 /// `file.name_clear` at or below the policy's threshold: the name may not
 /// say what the file holds.
+/// A layout change with no move (a folder outside the layout, or the
+/// unmapped top-level folder a file goes under, read with confidence as a
+/// role the layout lacks): context, never a denial.
+fn layout_note(ask: &Ask, d: &Decision) -> Option<String> {
+    let lc = d.verdict.layout_change.as_ref()?;
+    let p = &ask.projection;
+    Some(format!(
+        "xks-folder/1, project `{}`: new {} `{}`: the model reads it as {} (confidence {:.2}), \
+         a role the project's layout does not have; `{}/` would play it: `\"{}\": [\"{}\"]` in \
+         xks-project.json maps it.",
+        ask.manifest.name,
+        if p.op == Op::CreateDir {
+            "folder"
+        } else {
+            "file"
+        },
+        p.path,
+        lc.role,
+        d.verdict.confidence.unwrap_or(0.0),
+        lc.dir,
+        lc.role,
+        lc.dir
+    ))
+}
+
 fn name_note(ask: &Ask, d: &Decision) -> Option<String> {
     let at = Thresholds::default().name_unclear_at;
     let v = d.answers.get(catalog::FILE_NAME_CLEAR)?;
@@ -507,6 +542,7 @@ fn log_kept(root: &Path, p: &Projection, errors: &mut Vec<String>) {
             suggested_path: None,
             role: None,
             confidence: None,
+            layout_change: None,
         },
         answers: Map::new(),
         seconds: 0.0,
@@ -652,6 +688,7 @@ mod tests {
                 suggested_path: path.map(str::to_string),
                 role: Some(role.into()),
                 confidence: Some(conf),
+                layout_change: None,
             },
             answers,
             seconds: 3.0,

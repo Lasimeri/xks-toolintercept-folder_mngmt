@@ -1,7 +1,7 @@
 {
   "name": "xtf",
   "displayName": "xtf (xks-folder/1)",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Where new files and folders belong and what to name them, in every project: a PreToolUse hook on Write and mkdir, a SessionStart summary of the project's layout, and MCP tools (place_file, plan_tree, pick_name, new_project, project_info). Needs a running jevbase serve (one instance, see the README).",
   "author": { "name": "Lasimeri", "url": "https://github.com/Lasimeri" },
   "homepage": "https://github.com/Lasimeri/xks-toolintercept-folder_mngmt",

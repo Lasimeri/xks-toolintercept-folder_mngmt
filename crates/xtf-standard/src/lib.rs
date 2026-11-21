@@ -49,7 +49,7 @@ pub mod scaffold;
 
 pub use decide::{Decider, Decision};
 pub use manifest::{MANIFEST_FILE, Manifest, Place, STANDARD};
-pub use policy::{Action, Thresholds, Verdict};
+pub use policy::{Action, LayoutChange, Thresholds, Verdict};
 pub use projection::{Op, Projection};
 pub use roles::Role;
 
