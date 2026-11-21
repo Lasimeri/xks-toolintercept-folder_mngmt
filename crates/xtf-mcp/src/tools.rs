@@ -28,8 +28,8 @@ use xtf_standard::decide::{self, Decision, LOG_FILE};
 use xtf_standard::policy::{self, Pre};
 use xtf_standard::projection::summary_of;
 use xtf_standard::{
-    Action, Decider, MANIFEST_FILE, Manifest, Op, Projection, Role, STANDARD, Thresholds, Verdict,
-    catalog, naming, scaffold,
+    Action, Decider, LayoutChange, MANIFEST_FILE, Manifest, Op, Projection, Role, STANDARD,
+    Thresholds, Verdict, catalog, naming, scaffold,
 };
 
 use crate::{ask, layout};
@@ -315,7 +315,7 @@ fn place_file(a: &Args) -> Result<Outcome, String> {
     .map(|(d, _)| d)
     .map_err(|e| format!("{}.{}", ask::describe(&e, &base), rules_alone(&m, &p)))?;
     let logged = log(&root, &p, &d);
-    let gaps = layout::gaps(&m, [&p]);
+    let gaps = layout::gaps(&m, [(&p, Some(&d.verdict))]);
     let line = format!(
         "xks-folder/1: {}{}",
         verdict_text(&p.path, &d.verdict),
@@ -557,7 +557,7 @@ fn plan_tree(a: &Args) -> Result<Outcome, String> {
     if !collisions.is_empty() {
         line.push_str(&format!("; {} final paths claimed twice", collisions.len()));
     }
-    let gaps = layout::gaps(&m, plan.iter().map(|item| &item.p));
+    let gaps = layout::gaps(&m, plan.iter().map(|item| (&item.p, item.verdict.as_ref())));
     line.push_str(&layout::line_note(&gaps));
     let data = json!({
         "standard": STANDARD,
@@ -994,15 +994,16 @@ fn extend_layout(a: &Args) -> Result<Outcome, String> {
         Ok((added, already, m.clone()))
     })?;
     let mut logged = json!(LOG_FILE);
-    for d in &added {
+    for dir in &added {
         let p = Projection {
             op: Op::CreateDir,
-            path: d.clone(),
+            path: dir.clone(),
             from: None,
             summary: format!("a {key} folder of the layout"),
             tool: Some("extend_layout".into()),
         };
-        let d = Decision {
+        // The record is a layout change, the caller's: no model answer.
+        let decision = Decision {
             verdict: Verdict {
                 action: Action::Allow,
                 notes: vec![format!(
@@ -1011,11 +1012,15 @@ fn extend_layout(a: &Args) -> Result<Outcome, String> {
                 suggested_path: None,
                 role: Some(key.clone()),
                 confidence: None,
+                layout_change: Some(LayoutChange {
+                    role: key.clone(),
+                    dir: dir.clone(),
+                }),
             },
             answers: Map::new(),
             seconds: 0.0,
         };
-        let l = log(&root, &p, &d);
+        let l = log(&root, &p, &decision);
         if l != json!(LOG_FILE) {
             logged = l;
         }

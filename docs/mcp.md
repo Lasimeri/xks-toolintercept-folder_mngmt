@@ -221,7 +221,7 @@ Places a whole set of planned paths of one project before they are
 written: the rules first (deletions, generated and vendored paths,
 conventional top-level files, the naming style, the name and extension
 rules), then `file.root` for the rest, in requests on the project's manifest
-of at most 8 questions each. Returns each verdict, the resulting tree (the
+of at most 4 questions each. Returns each verdict, the resulting tree (the
 paths after the suggestions, with their parent folders) and any final path
 claimed by more than one planned path. `file.name_clear` is not asked here
 (one question per path keeps a plan affordable); `place_file` asks it.
@@ -233,79 +233,60 @@ claimed by more than one planned path. `file.name_clear` is not asked here
 
 Hints: readOnlyHint false, destructiveHint false, idempotentHint true, openWorldHint false.
 
-Recorded (12 planned paths of this repository; its layout maps `source`,
-`docs`, `data`, `out`):
+Recorded (12 planned paths of `flacopus`, a Rust command-line tool set up
+by `new_project` with kind `cli-tool`; its layout maps `source`, `tests`,
+`docs`, `out`):
 
 ```text
-xks-folder/1 plan of 12 paths in xks-toolintercept-folder_mngmt: 6 allow, 1 suggest, 5 uncertain; 3 settled by the rules, 9 asked in 1 request (16.0 s)
+xks-folder/1 plan of 12 paths in flacopus: 7 allow, 1 suggest, 4 uncertain; 4 settled by the rules, 8 asked in 2 requests (18.3 s); layout gaps bench.sh, scripts/ (see layout_gaps)
 ```
 
 ```json
 {
   "standard": "xks-folder/1",
-  "root": "~/work/repo",
-  "project": "xks-toolintercept-folder_mngmt",
+  "root": "~/work/flacopus",
+  "project": "flacopus",
   "files": [
-    {"path":"crates/xtf-mcp/src/rpc.rs","by":"model","action":"allow","notes":["it belongs in source (confidence 0.44)"],"role":"source","confidence":0.4447,"final":"crates/xtf-mcp/src/rpc.rs"},
-    {"path":"crates/xtf-mcp/src/ask.rs","by":"model","action":"allow","notes":["it belongs in source (confidence 0.36)"],"role":"source","confidence":0.3646,"final":"crates/xtf-mcp/src/ask.rs"},
-    {"path":"crates/xtf-mcp/tests/stdio_session.rs","by":"model","action":"uncertain","notes":["the model leans to out but is unsure (confidence 0.14): left as is"],"role":"out","confidence":0.1403,"final":"crates/xtf-mcp/tests/stdio_session.rs"},
-    {"path":"crates/xtf-mcp/benches/bench_latency.rs","by":"model","action":"allow","notes":["it belongs in source (confidence 0.08)"],"role":"source","confidence":0.0831,"final":"crates/xtf-mcp/benches/bench_latency.rs"},
-    {"path":"docs/mcp.md","by":"model","action":"uncertain","notes":["the model leans to out but is unsure (confidence 0.22): left as is"],"role":"out","confidence":0.216,"final":"docs/mcp.md"},
-    {"path":"crates/latency-notes.md","by":"model","action":"uncertain","notes":["the model leans to out but is unsure (confidence 0.21): left as is"],"role":"out","confidence":0.2105,"final":"crates/latency-notes.md"},
-    {"path":"calibration/results-v4.txt","by":"model","action":"uncertain","notes":["the model leans to out but is unsure (confidence 0.43): left as is"],"role":"out","confidence":0.434,"final":"calibration/results-v4.txt"},
-    {"path":"tools/gen_session.sh","by":"rules","action":"suggest","notes":["`tools` is not a directory of the project's layout","it belongs in out (out/), not where it is going (confidence 1.00)"],"suggested_path":"out/gen_session.sh","role":"out","confidence":1.0,"final":"out/gen_session.sh"},
-    {"path":"integrations/claude-code/plugin/.mcp.json","by":"model","action":"uncertain","notes":["`integrations` is not a directory of the project's layout","the model leans to config but is unsure (confidence 0.19): left as is"],"role":"config","confidence":0.1854,"final":"integrations/claude-code/plugin/.mcp.json"},
-    {"path":"out/session.log","by":"rules","action":"allow","notes":["the path is generated or vendored: not decided on"],"final":"out/session.log"},
-    {"path":"CHANGELOG.md","by":"rules","action":"allow","notes":["a conventional top-level file"],"final":"CHANGELOG.md"},
-    {"path":"crates/xtf-mcp/src","by":"model","action":"allow","notes":["it belongs in source (confidence 0.31)"],"role":"source","confidence":0.308,"final":"crates/xtf-mcp/src/"}
+    {"path":"Cargo.toml","by":"rules","action":"allow","notes":["a conventional top-level file"],"final":"Cargo.toml"},
+    {"path":"README.md","by":"rules","action":"allow","notes":["a conventional top-level file"],"final":"README.md"},
+    {"path":"src/main.rs","by":"model","action":"allow","notes":["it belongs in source (confidence 0.64)"],"role":"source","confidence":0.6423,"final":"src/main.rs"},
+    {"path":"src/convert.rs","by":"model","action":"allow","notes":["stays in source: the model leans the same way (confidence 0.45)"],"role":"source","confidence":0.4489,"final":"src/convert.rs"},
+    {"path":"src/report.rs","by":"model","action":"uncertain","notes":["the model leans to out but is unsure (confidence 0.33): left as is"],"role":"out","confidence":0.3325,"final":"src/report.rs"},
+    {"path":"src/thread_pool_notes.md","by":"model","action":"uncertain","notes":["the model leans to docs but is unsure (confidence 0.31): left as is"],"role":"docs","confidence":0.3139,"final":"src/thread_pool_notes.md"},
+    {"path":"tests/convert_test.rs","by":"rules","action":"allow","notes":["it belongs in tests (confidence 1.00)"],"role":"tests","confidence":1.0,"final":"tests/convert_test.rs"},
+    {"path":"tests/fixtures","by":"model","action":"allow","notes":["it belongs in tests (confidence 0.90)"],"role":"tests","confidence":0.9039,"final":"tests/fixtures/"},
+    {"path":"docs/usage.md","by":"model","action":"uncertain","notes":["the model leans to config but is unsure (confidence 0.12): left as is"],"role":"config","confidence":0.1247,"final":"docs/usage.md"},
+    {"path":"bench.sh","by":"model","action":"uncertain","notes":["the model leans to tools but is unsure (confidence 0.41): left as is"],"role":"tools","confidence":0.4066,"final":"bench.sh"},
+    {"path":"scripts","by":"model","action":"suggest","notes":["it reads as tools (confidence 0.90); the layout has no tools folder: `scripts/` would play that role"],"role":"tools","confidence":0.9044,"layout_change":{"role":"tools","dir":"scripts"},"final":"scripts/"},
+    {"path":"out/last-run-report.md","by":"rules","action":"allow","notes":["the path is generated or vendored: not decided on"],"final":"out/last-run-report.md"}
   ],
-  "tree": [
-    "CHANGELOG.md",
-    "calibration/",
-    "calibration/results-v4.txt",
-    "crates/",
-    "crates/latency-notes.md",
-    "crates/xtf-mcp/",
-    "crates/xtf-mcp/benches/",
-    "crates/xtf-mcp/benches/bench_latency.rs",
-    "crates/xtf-mcp/src/",
-    "crates/xtf-mcp/src/ask.rs",
-    "crates/xtf-mcp/src/rpc.rs",
-    "crates/xtf-mcp/tests/",
-    "crates/xtf-mcp/tests/stdio_session.rs",
-    "docs/",
-    "docs/mcp.md",
-    "integrations/",
-    "integrations/claude-code/",
-    "integrations/claude-code/plugin/",
-    "integrations/claude-code/plugin/.mcp.json",
-    "out/",
-    "out/gen_session.sh",
-    "out/session.log"
-  ],
+  "tree": ["Cargo.toml","README.md","bench.sh","docs/","docs/usage.md","out/","out/last-run-report.md","scripts/","src/","src/convert.rs","src/main.rs","src/report.rs","src/thread_pool_notes.md","tests/","tests/convert_test.rs","tests/fixtures/"],
   "collisions": [],
-  "requests": [
-    {
-      "questions": 9,
-      "seconds": 15.989,
-      "input_tokens": 3003,
-      "bytes": 4745
-    }
+  "layout_gaps": [
+    {"at":"bench.sh","kind":"root_file","paths":["bench.sh"],"layout_change":[],"usual_role":null,"layout_lacks":["examples","tools","integrations"],"layout_has":[{"role":"tests","dir":"tests/"}],"next":"bench.sh is not a file the project root holds; roles it plays that the layout lacks: examples (examples/), tools (tools/), integrations (integrations/): add one with extend_layout {role, dirs}, then plan it in that folder; or plan it in tests/"},
+    {"at":"scripts/","kind":"unmapped_folder","paths":["scripts/"],"layout_change":[{"role":"tools","dir":"scripts","confidence":0.9044,"from":"scripts/","suggested_path":null}],"usual_role":"tools","layout_lacks":[],"layout_has":[],"next":"the model reads scripts/ as tools (confidence 0.90): extend_layout {role: \"tools\", dirs: [\"scripts\"]} records scripts/ in the layout"}
   ],
+  "requests": [{"questions":4,"seconds":7.727,"input_tokens":1619,"bytes":2208},{"questions":4,"seconds":10.546,"input_tokens":2139,"bytes":3230}],
   "logged": ".xks/decisions.jsonl"
 }
 ```
 
-`tools/gen_session.sh` shows the one-role rule at work in a layout without
-a tools, tests, integrations or examples folder: `out` is the only role
-left for a script, so the rule decides it (see Known problems).
+The rules settle the conventional root files, the test file by its name
+and the run's report under `out/`; the model answers the other 8 in two
+requests of 4. `scripts/`, a new top-level folder, is asked among all
+roles and read as `tools` (confidence 0.90): the verdict carries
+`layout_change` and nothing is moved. `bench.sh` gets the right role,
+`tools`, under 0.5, so it stays. `src/convert.rs` stays in `source` with
+the model leaning the same way under 0.5. Inside the mapped folders the
+model reads a file's name and summary, not its folder (`docs/usage.md` as
+`config`, `src/report.rs` as `out`), so those answers stay unsure (see
+Known problems).
 
 #### Layout gaps
 
 `layout_gaps` (also in every `place_file` reply, `[]` when there is none)
 lists the planned paths that lie outside every folder of the layout, one
-entry per top-level folder or root file. They are facts read from the
-manifest and the standard's extension table, not decisions:
+entry per top-level folder or root file:
 
 - `unmapped_folder`: a new top-level folder, or paths under a top-level
   folder the layout does not map (`scripts/`);
@@ -314,33 +295,20 @@ manifest and the standard's extension table, not decisions:
   or `Cargo.toml`, configuration files and names without a known type are
   not gaps).
 
-Each entry gives the planned `paths` in it, `layout_lacks` (the roles their
-names or extensions make plausible that the layout has no folder for),
-`layout_has` (those it has, with their folders) and `next`, the step that
-closes it: `extend_layout` with the role, or planning the paths in a folder
-the layout has. The summary line ends with `layout gaps ... (see
-layout_gaps)` when there are any.
-
-Recorded (4 planned paths in `flacopus`, a Rust command-line tool whose
-layout maps `source`, `tests`, `docs`, `out`):
-
-```text
-xks-folder/1 plan of 4 paths in flacopus: 1 allow, 1 suggest, 2 uncertain; 0 settled by the rules, 4 asked in 1 request (9.7 s); layout gaps bench.sh, scripts/ (see layout_gaps)
-```
-
-```json
-[
-  {"at":"bench.sh","kind":"root_file","paths":["bench.sh"],"layout_lacks":["examples","tools","integrations"],"layout_has":[{"role":"tests","dir":"tests/"}],"next":"bench.sh is not a file the project root holds; roles it plays that the layout lacks: examples (examples/), tools (tools/), integrations (integrations/): add one with extend_layout {role, dirs}, then plan it in that folder; or plan it in tests/"},
-  {"at":"scripts/","kind":"unmapped_folder","paths":["scripts/","scripts/release.sh"],"layout_lacks":["examples","tools","integrations"],"layout_has":[{"role":"tests","dir":"tests/"}],"next":"the layout does not map scripts/: record the role it plays with extend_layout {role, dirs: [\"scripts\"]}; roles its planned files' types play that the layout lacks: examples, tools, integrations; or plan them in tests/ instead"}
-]
-```
-
-In the same plan the model, offered only `tests` and `out` for the scripts,
-chose `out` for both: `bench.sh` unsure (0.12), `scripts/release.sh`
-confidently (0.83, a suggestion to move it to `out/release.sh`). After
-`extend_layout` mapped `scripts/` as `tools`, `place_file` on `bench.sh`
-leaned to `tools` (probability 0.64, confidence 0.46): the right role, once
-the layout offers it.
+Each entry gives the planned `paths` in it; `layout_change`, the layout
+changes the model's confident verdicts on those paths name (role, folder,
+confidence, the path asked, and the suggested path of a root file);
+`usual_role`, for a folder, the role the standard's folder name table
+gives it (the table `xtf init` uses: a hint, not a decision);
+`layout_lacks`, the roles the files' names or extensions make plausible
+that the layout has no folder for; `layout_has`, those it has, with their
+folders; and `next`, the step that closes the gap. `next` is the model's
+`layout_change` as an `extend_layout` call when there is one, else the
+folder's usual role and the plausible roles. Nothing here asks the model:
+the gaps are read from the manifest, the standard's tables and the
+verdicts. The summary line ends with `layout gaps ... (see layout_gaps)`
+when there are any. In the plan above, `scripts/` has the model's change
+as its step, and `bench.sh`, unsure, lists the roles a script plays.
 
 ### place_file
 
@@ -363,52 +331,85 @@ role with where the path goes. The reply's `layout_gaps` is that of
 
 Hints: readOnlyHint false, destructiveHint false, idempotentHint true, openWorldHint false.
 
-Recorded (the content of `calibration/results-v3.txt`, projected to
-`crates/results-v3.txt`):
+Recorded (`bench.sh` in `flacopus` again, after `extend_layout` mapped
+`scripts/` as `tools`, below):
 
 ```text
-xks-folder/1: crates/results-v3.txt: suggest docs/results-v3.txt; it belongs in docs (docs/), not where it is going (confidence 0.61)
+xks-folder/1: bench.sh: uncertain; the model leans to tools but is unsure (confidence 0.44): left as is; layout gap bench.sh (see layout_gaps)
 ```
 
 ```json
 {
   "standard": "xks-folder/1",
-  "root": "~/work/repo",
-  "project": "xks-toolintercept-folder_mngmt",
+  "root": "~/work/flacopus",
+  "project": "flacopus",
   "projected": {
     "op": "create_file",
-    "path": "crates/results-v3.txt",
-    "summary": "141 items: 23 settled by the rules (conventional top-level files), 118 asked\ngold\tchosen\tconfidence\tpath\ndocs\tdocs\t0.0251\tdocs/subprojects/01-bluebird-baseline.md\ndocs\tdocs\t0.1203\tdocs/subprojects/04-long-sessions.md\ndocs\tconfig\t0.3869\tdocs"
+    "path": "bench.sh",
+    "summary": "Shell script that times the conversion of 100 FLAC files and prints the seconds."
   },
   "verdict": {
-    "action": "suggest",
+    "action": "uncertain",
     "notes": [
-      "it belongs in docs (docs/), not where it is going (confidence 0.61)"
+      "the model leans to tools but is unsure (confidence 0.44): left as is"
     ],
-    "suggested_path": "docs/results-v3.txt",
-    "role": "docs",
-    "confidence": 0.6107
+    "role": "tools",
+    "confidence": 0.4445
   },
   "answers": {
     "file.root": {
       "type": "choice",
-      "choice": "docs",
+      "choice": "tools",
       "probabilities": {
-        "docs": 0.7405,
-        "data": 0.0947,
-        "out": 0.1648
+        "tests": 0.1535,
+        "examples": 0.124,
+        "tools": 0.5371,
+        "integrations": 0.0556,
+        "out": 0.0849,
+        "config": 0.0449
       },
-      "confidence": 0.6107
+      "confidence": 0.4445
     },
     "file.name_clear": {
       "type": "noul",
-      "noul": 0.6485
+      "noul": 0.4476
     }
   },
-  "seconds": 3.59,
+  "layout_gaps": [
+    {
+      "at": "bench.sh",
+      "kind": "root_file",
+      "paths": [
+        "bench.sh"
+      ],
+      "layout_change": [],
+      "usual_role": null,
+      "layout_lacks": [
+        "examples",
+        "integrations"
+      ],
+      "layout_has": [
+        {
+          "role": "tests",
+          "dir": "tests/"
+        },
+        {
+          "role": "tools",
+          "dir": "scripts/"
+        }
+      ],
+      "next": "bench.sh is not a file the project root holds; roles it plays that the layout lacks: examples (examples/), integrations (integrations/): add one with extend_layout {role, dirs}, then plan it in that folder; or plan it in tests/ or scripts/"
+    }
+  ],
+  "seconds": 4.022,
   "logged": ".xks/decisions.jsonl"
 }
 ```
+
+The model leans to `tools` among six roles (probability 0.54, confidence
+0.44): under 0.5 the file stays, and the gap's `next` now names
+`scripts/`, the folder that plays `tools`. A root file stays a gap until it
+is written inside a folder.
 
 ### extend_layout
 
@@ -656,26 +657,26 @@ more when another session's request on a different state came just before
 (the state is read again); and 3,378 ms waiting behind another session's
 request in the 6,588.1 ms call.
 
-Why at most 8 questions a request: `jevbase serve` answers one request at a
+Why at most 4 questions a request: `jevbase serve` answers one request at a
 time, in the order they connect, and the hook gives up on a decision after
 15 s. With 32, a 32-question request held the server 41.5 s (1.30 s a
 question) and the two hook requests queued behind it were answered after
-their clients had gone (the server logged `Broken pipe` twice). With 8 the
-same 34 paths took 41.95 s in five requests of at most 10.2 s, the state
-staying cached between them.
+their clients had gone (the server logged `Broken pipe` twice). With 8, a
+real `plan_tree` request held it 14.1 s and 14.8 s (2,908 input tokens),
+which leaves a hook queued behind it no time inside its 15 s. With 4 the
+plan recorded above took two requests of 7.7 s and 10.5 s (1,619 and 2,139
+input tokens); the longer one holds a 12-option folder question.
 
 ## Known problems
 
-- When a project's layout has none of the roles a file's extension allows
-  (a `.sh` script in a layout without tools, tests, integrations or
-  examples), `out` is the only role left and the one-role rule suggests
-  moving the file to `out/` at confidence 1.00: recorded for
-  `calibration/make-set.sh` in this repository (`catalog::root_options`
-  with `Decider`, in xtf-standard).
-- `decide::log` writes one decision line in many small writes (84 for a
-  250-byte line, counted with strace), so two processes appending to the
-  same log at the same moment (the hook and this server) can interleave
-  their lines. Within this server the appends are serialized.
+- A request of 4 questions holds the one server up to about 10.5 s when one
+  of them is a folder question over all 12 roles, which leaves a hook
+  queued behind it about 4 s of its 15 s. A budget on the request's size
+  instead of its question count is open (`ask.rs`).
+- Inside the layout's folders the model reads a file's name and summary,
+  not its folder: in the recorded plan `docs/usage.md` was read as `config`
+  (0.12) and `src/report.rs` as `out` (0.33), both left as they are under
+  0.5. Open in xtf-standard.
 - `notifications/cancelled` is not acted on: a cancelled call runs to its
   bound and its reply is written (a client ignores replies to cancelled
   requests).

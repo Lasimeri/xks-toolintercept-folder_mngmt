@@ -4,9 +4,12 @@
 //! layout: a new top-level folder, a path under a top-level folder the layout
 //! does not map, or a file in the project root whose type (by the standard's
 //! extension table, `roles::plausible`) is not one a root holds. Gaps are
-//! facts read from the manifest and that table; nothing here asks the model
-//! or decides where a path goes. `extend_layout` (in `tools`) adds folders to
-//! the layout under a role the caller names, through `update_manifest`.
+//! read from the manifest, that table, the standard's folder name table
+//! (`roles::by_folder_name`, a hint) and the layout changes the model's
+//! confident verdicts name (`Verdict::layout_change`); nothing here asks the
+//! model or decides where a path goes. `extend_layout` (in `tools`) adds
+//! folders to the layout under a role the caller names, through
+//! `update_manifest`.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs::OpenOptions;
@@ -17,7 +20,7 @@ use std::path::Path;
 use serde_json::{Value, json};
 use xtf_standard::decide::LOG_FILE;
 use xtf_standard::roles::{self, Role};
-use xtf_standard::{MANIFEST_FILE, Manifest, Op, Place, Projection, naming};
+use xtf_standard::{LayoutChange, MANIFEST_FILE, Manifest, Op, Place, Projection, Verdict, naming};
 
 /// One gap: where it is, and the planned paths that fall into it.
 struct Gap {
@@ -27,6 +30,35 @@ struct Gap {
     paths: Vec<String>,
     /// Roles the planned files' names or extensions make plausible.
     plausible: BTreeSet<Role>,
+    /// The layout changes the model's confident verdicts on these paths
+    /// name (`Verdict::layout_change`), distinct, with the confidence and
+    /// the path of the first verdict naming each, and its suggested path.
+    model: Vec<(LayoutChange, f64, String, Option<String>)>,
+}
+
+impl Gap {
+    fn new(at: String, folder: bool) -> Gap {
+        Gap {
+            at,
+            folder,
+            paths: Vec::new(),
+            plausible: BTreeSet::new(),
+            model: Vec::new(),
+        }
+    }
+
+    fn heard(&mut self, path: &str, v: Option<&Verdict>) {
+        let Some(v) = v else { return };
+        let Some(c) = &v.layout_change else { return };
+        if self.model.iter().all(|(m, ..)| m != c) {
+            self.model.push((
+                c.clone(),
+                v.confidence.unwrap_or(0.0),
+                path.to_string(),
+                v.suggested_path.clone(),
+            ));
+        }
+    }
 }
 
 /// The path's components, `.` and empty ones dropped.
@@ -48,11 +80,15 @@ fn plausible_of(name: &str) -> Vec<Role> {
         .unwrap_or_default()
 }
 
-/// The gaps among `planned`, one entry per top-level folder or root file,
-/// in path order. Deletions never make a gap.
-pub fn gaps<'a>(m: &Manifest, planned: impl IntoIterator<Item = &'a Projection>) -> Vec<Value> {
+/// The gaps among `planned` (each path with its verdict, when there is
+/// one), one entry per top-level folder or root file, in path order.
+/// Deletions never make a gap.
+pub fn gaps<'a>(
+    m: &Manifest,
+    planned: impl IntoIterator<Item = (&'a Projection, Option<&'a Verdict>)>,
+) -> Vec<Value> {
     let mut found: BTreeMap<String, Gap> = BTreeMap::new();
-    for p in planned {
+    for (p, v) in planned {
         if p.op == Op::Delete {
             continue;
         }
@@ -71,14 +107,12 @@ pub fn gaps<'a>(m: &Manifest, planned: impl IntoIterator<Item = &'a Projection>)
             if pl.is_empty() || pl.contains(&Role::Config) {
                 continue;
             }
-            let g = found.entry(top.to_string()).or_insert_with(|| Gap {
-                at: top.to_string(),
-                folder: false,
-                paths: Vec::new(),
-                plausible: BTreeSet::new(),
-            });
+            let g = found
+                .entry(top.to_string())
+                .or_insert_with(|| Gap::new(top.to_string(), false));
             g.paths.push(top.to_string());
             g.plausible.extend(pl);
+            g.heard(top, v);
             continue;
         }
         // In (or being) a top-level folder: a gap when the layout and the
@@ -92,17 +126,16 @@ pub fn gaps<'a>(m: &Manifest, planned: impl IntoIterator<Item = &'a Projection>)
             continue;
         }
         let at = format!("{top}/");
-        let g = found.entry(at.clone()).or_insert_with(|| Gap {
-            at,
-            folder: true,
-            paths: Vec::new(),
-            plausible: BTreeSet::new(),
-        });
-        g.paths.push(if dir {
+        let g = found
+            .entry(at.clone())
+            .or_insert_with(|| Gap::new(at, true));
+        let shown = if dir {
             format!("{}/", ps.join("/"))
         } else {
             ps.join("/")
-        });
+        };
+        g.heard(&shown, v);
+        g.paths.push(shown);
         if !dir {
             g.plausible.extend(plausible_of(ps[ps.len() - 1]));
         }
@@ -136,13 +169,44 @@ fn describe(m: &Manifest, have: &[Role], g: Gap) -> Value {
         .copied()
         .collect();
     let has_dirs: Vec<String> = has.iter().map(|r| format!("{}/", m.dir_for(*r))).collect();
-    let next = if g.folder {
-        let top = g.at.trim_end_matches('/');
+    let top = g.at.trim_end_matches('/');
+    // The folder name table of the standard (the one `xtf init` uses): a
+    // hint, never a decision.
+    let usual_role = if g.folder {
+        roles::by_folder_name(top).filter(|r| *r != Role::Config)
+    } else {
+        None
+    };
+    let next = if !g.model.is_empty() {
+        // The model named the role: its verdict is the step.
+        g.model
+            .iter()
+            .map(|(c, conf, path, moved)| {
+                let mut s = format!(
+                    "the model reads {path} as {} (confidence {conf:.2}): extend_layout \
+                     {{role: \"{}\", dirs: [\"{}\"]}} records {}/ in the layout",
+                    c.role, c.role, c.dir, c.dir
+                );
+                if let Some(to) = moved {
+                    s.push_str(&format!(", then write it as {to}"));
+                }
+                s
+            })
+            .collect::<Vec<_>>()
+            .join("; ")
+    } else if g.folder {
         let mut s = format!(
             "the layout does not map {}: record the role it plays with extend_layout \
              {{role, dirs: [\"{top}\"]}}",
             g.at
         );
+        if let Some(r) = usual_role {
+            s.push_str(&format!(
+                "; by its name, {} usually plays {}",
+                g.at,
+                r.key()
+            ));
+        }
         if !lacks.is_empty() {
             s.push_str(&format!(
                 "; roles its planned files' types play that the layout lacks: {}",
@@ -178,6 +242,10 @@ fn describe(m: &Manifest, have: &[Role], g: Gap) -> Value {
         "at": g.at,
         "kind": if g.folder { "unmapped_folder" } else { "root_file" },
         "paths": g.paths,
+        "layout_change": g.model.iter().map(|(c, conf, path, moved)| json!({
+            "role": c.role, "dir": c.dir, "confidence": conf, "from": path, "suggested_path": moved,
+        })).collect::<Vec<_>>(),
+        "usual_role": usual_role.map(Role::key),
         "layout_lacks": lacks.iter().map(|r| r.key()).collect::<Vec<_>>(),
         "layout_has": has.iter().map(|r| json!({"role": r.key(), "dir": format!("{}/", m.dir_for(*r))})).collect::<Vec<_>>(),
         "next": next,
@@ -336,7 +404,7 @@ mod tests {
             proj(Op::Delete, "old/x.rs"),
             proj(Op::CreateFile, "target/debug/x"),
         ];
-        let g = gaps(&m, &planned);
+        let g = gaps(&m, planned.iter().map(|p| (p, None)));
         let at: Vec<&str> = g.iter().map(|v| v["at"].as_str().unwrap()).collect();
         // Not gaps: conventional and config root files, layout folders, out/,
         // a name without a known type, a deletion, and target/ (in the
@@ -364,6 +432,14 @@ mod tests {
         );
         let next = g[1]["next"].as_str().unwrap();
         assert!(next.contains("dirs: [\"scripts\"]"), "{next}");
+        // The standard's folder name table gives a hint for scripts/.
+        assert_eq!(g[1]["usual_role"], "tools");
+        assert!(
+            next.contains("by its name, scripts/ usually plays tools"),
+            "{next}"
+        );
+        assert_eq!(g[0]["usual_role"], Value::Null);
+        assert_eq!(g[0]["layout_change"], json!([]));
         assert_eq!(
             line_note(&g),
             "; layout gaps bench.sh, scripts/ (see layout_gaps)"
@@ -372,9 +448,53 @@ mod tests {
     }
 
     #[test]
+    fn the_models_layout_change_is_the_next_step() {
+        let m = manifest();
+        let v = |role: &str, dir: &str, moved: Option<&str>| Verdict {
+            action: xtf_standard::Action::Suggest,
+            notes: Vec::new(),
+            suggested_path: moved.map(str::to_string),
+            role: Some(role.into()),
+            confidence: Some(0.8893),
+            layout_change: Some(LayoutChange {
+                role: role.into(),
+                dir: dir.into(),
+            }),
+        };
+        let folder = proj(Op::CreateDir, "scripts");
+        let file = proj(Op::CreateFile, "scripts/release.sh");
+        let root = proj(Op::CreateFile, "bench.sh");
+        let (vf, vr) = (
+            v("tools", "scripts", None),
+            v("tools", "tools", Some("tools/bench.sh")),
+        );
+        // Two verdicts naming the same change count once.
+        let g = gaps(
+            &m,
+            [(&root, Some(&vr)), (&folder, Some(&vf)), (&file, Some(&vf))],
+        );
+        assert_eq!(
+            g[1]["layout_change"],
+            json!([{"role": "tools", "dir": "scripts", "confidence": 0.8893,
+                    "from": "scripts/", "suggested_path": null}])
+        );
+        let next = g[1]["next"].as_str().unwrap();
+        assert_eq!(
+            next,
+            "the model reads scripts/ as tools (confidence 0.89): extend_layout {role: \"tools\", \
+             dirs: [\"scripts\"]} records scripts/ in the layout"
+        );
+        let next = g[0]["next"].as_str().unwrap();
+        assert!(
+            next.ends_with("records tools/ in the layout, then write it as tools/bench.sh"),
+            "{next}"
+        );
+    }
+
+    #[test]
     fn a_name_convention_counts_before_the_extension() {
         let m = manifest();
-        let g = gaps(&m, &[proj(Op::CreateFile, "bench_convert.rs")]);
+        let g = gaps(&m, [(&proj(Op::CreateFile, "bench_convert.rs"), None)]);
         assert_eq!(g[0]["layout_lacks"], json!(["benches"]));
         assert_eq!(g[0]["layout_has"], json!([]));
         let next = g[0]["next"].as_str().unwrap();
