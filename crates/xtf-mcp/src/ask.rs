@@ -56,6 +56,17 @@ pub const MAX_QUESTIONS: usize = 4;
 /// server still finds too long is split in two and sent again.
 const REQUEST_TOKENS: usize = 48_000;
 
+/// Most question bytes (each question's JSON and id) put into one request:
+/// what holds the one shared server is a request's size, not its question
+/// count. Measured on `jevbase serve` (Qwen3.8 2B Q8_0, 8 threads,
+/// 2026-11-21): requests of 750 to 2,908 server input tokens took 3.6 to
+/// 14.1 s, about 4.9 ms a token. The same 12-path plan_tree: 4 questions a
+/// request, longest 10.554 s; 1,800 question bytes, longest 7.82 s; 1,400,
+/// longest 4.844 s in 4 requests (16.98 s in all, no slower), the same
+/// choices. So a hook queued behind one keeps about 10 s of its 15 s. A
+/// question longer than this alone still goes, alone.
+pub const REQUEST_BYTES: usize = 1_400;
+
 /// Why no evaluation came back.
 #[derive(Debug, Clone, PartialEq)]
 pub enum AskError {
@@ -164,20 +175,29 @@ pub struct Sent {
     pub bytes: usize,
 }
 
-/// The questions in requests on `state`: in order, at most `MAX_QUESTIONS`
-/// and `REQUEST_TOKENS` (estimated) each.
+/// The questions in requests on `state`: in order, at most `MAX_QUESTIONS`,
+/// `REQUEST_BYTES` of questions and `REQUEST_TOKENS` (estimated) each; a
+/// request always takes at least one question.
 pub fn chunks(state: &str, questions: Vec<(String, Value)>) -> Vec<Vec<(String, Value)>> {
     let base = state_tokens(state.len());
     let mut out: Vec<Vec<(String, Value)>> = Vec::new();
     let mut cur: Vec<(String, Value)> = Vec::new();
     let mut used = base;
+    let mut bytes = 0;
     for (id, q) in questions {
-        let t = question_tokens(q.to_string().len() + id.len());
-        if !cur.is_empty() && (cur.len() == MAX_QUESTIONS || used + t > REQUEST_TOKENS) {
+        let b = q.to_string().len() + id.len();
+        let t = question_tokens(b);
+        if !cur.is_empty()
+            && (cur.len() == MAX_QUESTIONS
+                || used + t > REQUEST_TOKENS
+                || bytes + b > REQUEST_BYTES)
+        {
             out.push(std::mem::take(&mut cur));
             used = base;
+            bytes = 0;
         }
         used += t;
+        bytes += b;
         cur.push((id, q));
     }
     if !cur.is_empty() {
@@ -252,8 +272,8 @@ mod tests {
             want.push(70 % MAX_QUESTIONS);
         }
         assert_eq!(sizes, want);
-        // Questions of about 20,000 bytes (about 20,100 estimated tokens): two fit
-        // the 48,000-token budget with the state, the third starts a request.
+        // Questions of about 20,000 bytes: each past REQUEST_BYTES alone, so
+        // each goes in a request of its own (never dropped).
         let big = |n: usize| {
             (
                 format!("b{n}"),
@@ -264,7 +284,23 @@ mod tests {
             .iter()
             .map(Vec::len)
             .collect();
-        assert_eq!(sizes, [2, 2, 2, 2, 2, 2]);
+        assert_eq!(sizes, [1; 12]);
+        // Questions of about 600 bytes: two fit REQUEST_BYTES (1,400), the
+        // third starts a request, though MAX_QUESTIONS would allow four.
+        let mid = |n: usize| {
+            let q = json!({"type": "noul", "instructions": "z".repeat(560)});
+            let id = format!("m{n}");
+            let pad = 600 - (q.to_string().len() + id.len());
+            (
+                id,
+                json!({"type": "noul", "instructions": "z".repeat(560 + pad)}),
+            )
+        };
+        let sizes: Vec<usize> = chunks("s", (0..7).map(mid).collect())
+            .iter()
+            .map(Vec::len)
+            .collect();
+        assert_eq!(sizes, [2, 2, 2, 1]);
         assert!(chunks("s", Vec::new()).is_empty());
     }
 

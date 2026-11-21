@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.3.1 (2026-11-21)
+
+### Changed
+
+- **Requests to the server are cut by size as well as count**: at most 4
+  questions and 1,400 bytes of questions each. What holds the one shared
+  server is a request's size (measured: about 4.9 ms per server input token
+  for requests of 750 to 2,908 tokens), and 0.3.0's longer folder questions
+  made a 4-question request take 10.6 s. On the same 12-path plan the
+  longest request now takes 4.8 s (4 requests, 16.98 s in all, against 18.2
+  s before), with the same choices; a hook queued behind one keeps about
+  10 s of its 15 s.
+- With lane/ux merged (0.3.0 tail): `extend_layout`, layout gaps in
+  `plan_tree` and `place_file`, and the acceptance scenarios
+  (`tests/acceptance/`, run with `cargo test -p xtf-mcp --test acceptance --
+  --ignored`).
+
 ## 0.3.0 (2026-11-21)
 
 The layout grows with the project: paths outside it are asked what they

@@ -239,9 +239,10 @@ if decision.verdict.action == Action::Suggest {
   sessions deciding at once queue behind each other (three at once: 4.2 to
   5.7 s each). A hook that waits past 15 s lets its operation through
   undecided; that takes about five decisions arriving together, or one
-  behind a long `plan_tree` request. Requests carry at most 4 questions:
-  measured 7.6 s and 10.6 s for two of them (the second with a 12-option
-  folder question), so a hook queued behind one has about 4 s to spare.
+  behind a long `plan_tree` request. Requests carry at most 4 questions and
+  1,400 bytes of questions: on a 12-path plan the longest held the server
+  4.8 s (it was 10.6 s with a cap of 4 questions alone), so a hook queued
+  behind one keeps about 10 s of its 15 s.
 - **Inside a mapped folder, a new folder is judged by its name.** A new
   top-level folder is asked against every role and can be confident
   (`scripts/` read as tools at 0.92, and the layout change offered), but a
