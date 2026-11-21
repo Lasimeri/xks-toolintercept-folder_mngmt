@@ -1,0 +1,14 @@
+xks-toolintercept-folder_mngmt
+Copyright 2026 Lasimeri
+
+Builds on XKS_Jev-like_Model_Base (https://github.com/Lasimeri/XKS_Jev-like_Model_Base,
+MIT or Apache-2.0), used client side only: its System One wire types and the
+HTTP client of a running `jevbase serve`.
+
+The calibration set (calibration/) labels files of Intel-Phi-Jev,
+Mechanical-Jev, XKS_Jev-like_Model_Base, XKS-Memory, xks-id and x1tt3r by the
+role of the folder they live in; the files themselves are read from local
+checkouts and are not part of this repository.
+
+This work is offered under the MIT license or the Apache License 2.0, at
+your option.

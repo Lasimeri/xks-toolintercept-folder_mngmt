@@ -1,0 +1,166 @@
+141 items: 23 settled by the rules (conventional top-level files), 118 asked
+gold	chosen	confidence	path
+docs	docs	0.0251	docs/subprojects/01-bluebird-baseline.md
+docs	docs	0.1203	docs/subprojects/04-long-sessions.md
+docs	config	0.3869	docs/subprojects/README.md
+docs	out	0.1339	docs/subprojects/results/04-long-sessions-x86.json
+examples	out	0.2354	examples/avx512_parity.jsonl
+examples	config	0.2008	examples/dev_tasks.jsonl
+examples	examples	0.0688	examples/long_sessions.jsonl
+examples	config	0.2834	examples/query.json
+tools	docs	0.3897	scripts/check-docs.md
+tools	tools	0.5534	scripts/check-docs.sh
+source	source	0.5490	src/artichoke/mod.rs
+source	source	0.3864	src/backend/typesafe.rs
+source	source	0.4806	src/judge.rs
+source	source	0.5066	src/prompt.rs
+docs	docs	0.3991	docs/reverse-engineering.md
+docs	docs	0.1179	docs/tui.md
+docs	docs	0.4980	docs/uses.md
+data	config	0.2598	evidence/README.md
+data	data	0.2440	evidence/invariants.json
+data	config	0.0948	evidence/published_pairs.json
+examples	data	0.2351	examples/dev_tasks.jsonl
+examples	data	0.7245	examples/long_sessions.jsonl
+examples	config	0.2128	examples/query.json
+examples	data	0.2570	examples/wide_choice.jsonl
+tools	docs	0.3912	scripts/check-docs.md
+tools	tools	0.4413	scripts/check-docs.sh
+source	source	0.5138	src/client.rs
+source	source	0.3559	src/eval.rs
+source	source	0.3825	src/main.rs
+source	source	0.6195	src/tui/app.rs
+tools	config	0.6321	tools/jevre/.gitignore
+tools	source	0.1308	tools/jevre/Cargo.lock
+tools	data	0.2650	tools/jevre/TOKENIZERS
+tools	docs	0.0717	tools/jevre/src/main.md
+source	source	0.6764	csrc/shim.c
+examples	config	0.1960	examples/dev_tasks.jsonl
+examples	examples	0.1870	examples/long_sessions.jsonl
+examples	config	0.2647	examples/query.json
+examples	examples	0.2050	examples/wide_choice.jsonl
+source	source	0.5749	src/client.rs
+source	source	0.6901	src/judge.rs
+source	source	0.6777	src/protocol.rs
+source	source	0.6227	src/tui/edit.rs
+tests	config	0.2677	tests/bench/tune.jsonl
+tests	out	0.3832	tests/bench/tune.sh
+tests	out	0.2812	tests/parity/compare.jq
+tests	config	0.1110	tests/parity/requests.jsonl
+config	config	0.2590	CODE_OF_CONDUCT.md
+source	source	0.6423	backends/opencl/ocl_rsvd.c
+source	include	0.3646	backends/opencl/ocl_rsvd.h
+source	source	0.6090	backends/opencl/rsvd.cl
+benches	benches	1.0000	benchmarks/bench_get.c
+benches	benches	1.0000	benchmarks/bench_semantic.c
+benches	benches	1.0000	benchmarks/bench_vector.c
+benches	source	0.4876	benchmarks/embed_llama.c
+source	integrations	0.2378	cli/harness.c
+source	include	0.2089	cli/harness.h
+source	source	0.4429	cli/main.c
+docs	out	0.1243	docs/AGENTS_INTEGRATION.md
+docs	docs	0.1538	docs/EMBEDDING.md
+docs	config	0.1288	docs/KNC_SHA256_PLAN.md
+docs	docs	0.2404	docs/RESEARCH.md
+include	include	0.6333	include/xksm.h
+integrations	config	0.2699	integrations/claude-code/.claude-plugin/marketplace.json
+integrations	integrations	0.6877	integrations/claude-code/plugin/.mcp.json
+integrations	integrations	0.3814	integrations/claude-code/plugin/scripts/xksm-run
+integrations	integrations	0.5363	integrations/omp/mcp.json
+docs	out	0.2187	reports/agents-2026-11-06.md
+docs	out	0.1917	reports/insert-2026-11-06.md
+docs	docs	0.2042	reports/search-2026-11-06.md
+docs	out	0.1067	reports/sha256-2026-11-06.md
+source	source	0.6010	src/cache/cache.c
+source	include	0.2569	src/core/sha256.h
+source	source	0.6395	src/semantic/linalg.c
+source	source	0.3518	src/semantic/sparse.h
+tests	tools	0.2168	tests/cli_harness.sh
+tests	tests	1.0000	tests/test_search.c
+tests	out	0.2616	tests/tui/golden/02-turns.txt
+tests	out	0.2456	tests/tui/golden/14-embedding.txt
+tools	tools	0.4027	tools/install.sh
+tools	source	0.4569	tools/port_build.c
+tools	tools	0.7033	tools/port_words.sh
+tools	tools	0.6038	tools/release-check.sh
+source	source	0.1446	tui/Cargo.lock
+source	config	0.2000	tui/Cargo.toml
+source	source	0.5231	tui/src/ffi.rs
+source	source	0.7186	tui/src/store.rs
+docs	docs	0.1709	docs/DESIGN.md
+docs	docs	0.3587	docs/METHODS.md
+docs	docs	0.3618	docs/VECTORS.md
+docs	out	0.3412	docs/diagram.txt
+integrations	integrations	0.8134	integrations/claude-code/hooks.json
+integrations	source	0.6068	integrations/omp/xks-id.ts
+integrations	integrations	0.8317	integrations/systemd/xksid.service
+integrations	integrations	0.3394	integrations/wire.sh
+source	out	0.4175	src/compile_flags.txt
+source	source	0.6910	src/xksid/cal.c
+source	source	0.5367	src/xksid/rules.h
+source	source	0.4263	src/xksid/tok.h
+tests	tests	1.0000	tests/cal_test.c
+tests	tools	0.3574	tests/notify.sh
+tests	out	0.1768	tests/phrase-parts.txt
+tests	tools	0.1529	tests/stop.sh
+tools	tools	0.5360	tools/boxgen.awk
+source	source	0.1948	tui/Cargo.lock
+source	config	0.4069	tui/Cargo.toml
+source	source	0.6166	tui/src/main.rs
+tools	tools	0.6010	scripts/smoke.sh
+source	source	0.5282	src/activity.ts
+source	source	0.1274	src/config.ts
+source	source	0.4116	src/index.ts
+source	source	0.1394	src/render.ts
+out	out	1.0000	out/logs/llama-build.log
+out	out	1.0000	out/parity/jevbase-jev-exact.log
+out	out	0.1896	out/parity/jevbase-serve-exact.jsonl
+out	out	0.2192	out/parity/oracle-letters.jsonl
+out	out	0.2581	out/tui-snapshot-set.txt
+out	out	0.2975	out/tune/fa-on.txt
+
+7 settled by the extension rule (one plausible role)
+
+file.root: 72 of 118 right (61.0%), 356.6 s, 0.33 decisions/s
+  gold benches         3 of   4
+  gold config          1 of   1
+  gold data            1 of   3
+  gold docs           11 of  19
+  gold examples        3 of  12
+  gold include         1 of   1
+  gold integrations    6 of   8
+  gold out             6 of   6
+  gold source         31 of  38
+  gold tests           2 of  12
+  gold tools           7 of  14
+  confused benches -> source: 1
+  confused data -> config: 2
+  confused docs -> config: 2
+  confused docs -> out: 6
+  confused examples -> config: 5
+  confused examples -> data: 3
+  confused examples -> out: 1
+  confused integrations -> config: 1
+  confused integrations -> source: 1
+  confused source -> config: 2
+  confused source -> include: 3
+  confused source -> integrations: 1
+  confused source -> out: 1
+  confused tests -> config: 2
+  confused tests -> out: 5
+  confused tests -> tools: 3
+  confused tools -> config: 1
+  confused tools -> data: 1
+  confused tools -> docs: 3
+  confused tools -> source: 2
+
+threshold  answered  right-of-answered  would-move-a-right-file
+  >= 0.0    118 100.0%    61.0%             46 (39.0% of all)
+  >= 0.1    114  96.6%    61.4%             44 (37.3% of all)
+  >= 0.2     94  79.7%    63.8%             34 (28.8% of all)
+  >= 0.3     66  55.9%    78.8%             14 (11.9% of all)
+  >= 0.4     50  42.4%    86.0%              7 (5.9% of all)
+  >= 0.5     39  33.1%    92.3%              3 (2.5% of all)
+  >= 0.6     29  24.6%    89.7%              3 (2.5% of all)
+  >= 0.7     12  10.2%    91.7%              1 (0.8% of all)
+./target/release/xtf calibrate calibration/file-root.jsonl --repos  --batch 5  0.01s user 0.00s system 0% cpu 5:56.56 total

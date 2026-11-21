@@ -1,0 +1,28 @@
+{
+  "standard": "xks-folder/1",
+  "name": "x1tt3r",
+  "purpose": "Fixes Twitter/X link embeds in Discord: insert 1tt3r after the x in any post link",
+  "languages": [
+    "typescript"
+  ],
+  "layout": {
+    "source": [
+      "src"
+    ],
+    "tools": [
+      "scripts"
+    ],
+    "out": [
+      "out"
+    ]
+  },
+  "naming": {
+    "files": "kebab-case",
+    "dirs": "kebab-case"
+  },
+  "ignore": [
+    ".git",
+    "target",
+    "node_modules"
+  ]
+}

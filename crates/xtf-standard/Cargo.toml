@@ -1,0 +1,24 @@
+[package]
+name = "xtf-standard"
+description = "The xks-folder/1 decision standard: project manifest, projected operations, the fixed question catalog, rules, policy and decision log"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+readme = "../../README.md"
+keywords = ["jev", "system-one", "coding-agents", "project-layout", "decisions"]
+categories = ["command-line-utilities", "development-tools"]
+
+[lib]
+name = "xtf_standard"
+path = "src/lib.rs"
+
+[[bin]]
+name = "xtf"
+path = "src/bin/xtf.rs"
+
+[dependencies]
+jevbase.workspace = true
+serde.workspace = true
+serde_json.workspace = true

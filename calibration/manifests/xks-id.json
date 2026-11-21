@@ -1,0 +1,39 @@
+{
+  "standard": "xks-folder/1",
+  "name": "xks-id",
+  "purpose": "A heuristic intrusion-detection engine for prompt injection in AI agent harnesses, working from the turns XKS-Memory records",
+  "languages": [
+    "c",
+    "rust"
+  ],
+  "layout": {
+    "source": [
+      "src",
+      "tui"
+    ],
+    "tests": [
+      "tests"
+    ],
+    "docs": [
+      "docs"
+    ],
+    "tools": [
+      "tools"
+    ],
+    "integrations": [
+      "integrations"
+    ],
+    "out": [
+      "out"
+    ]
+  },
+  "naming": {
+    "files": "snake_case",
+    "dirs": "snake_case"
+  },
+  "ignore": [
+    ".git",
+    "target",
+    "node_modules"
+  ]
+}

@@ -1,0 +1,36 @@
+{
+  "standard": "xks-folder/1",
+  "name": "XKS_Jev-like_Model_Base",
+  "purpose": "Jev-like typed judgments (noul / choice / score) from a local LLM's next-token distribution, on the CPU with llama.cpp: a small base to build on",
+  "languages": [
+    "rust",
+    "c"
+  ],
+  "layout": {
+    "source": [
+      "src",
+      "csrc"
+    ],
+    "tests": [
+      "tests"
+    ],
+    "examples": [
+      "examples"
+    ],
+    "third_party": [
+      "third_party"
+    ],
+    "out": [
+      "out"
+    ]
+  },
+  "naming": {
+    "files": "snake_case",
+    "dirs": "snake_case"
+  },
+  "ignore": [
+    ".git",
+    "target",
+    "node_modules"
+  ]
+}

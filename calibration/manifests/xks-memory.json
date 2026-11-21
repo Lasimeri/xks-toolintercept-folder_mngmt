@@ -1,0 +1,48 @@
+{
+  "standard": "xks-folder/1",
+  "name": "XKS-Memory",
+  "purpose": "Offline, local, long-term memory for AI coding agents and language models: every turn of an agent session stored with its time and embedded without a neural network",
+  "languages": [
+    "c",
+    "rust"
+  ],
+  "layout": {
+    "source": [
+      "src",
+      "cli",
+      "tui",
+      "backends"
+    ],
+    "include": [
+      "include"
+    ],
+    "tests": [
+      "tests"
+    ],
+    "benches": [
+      "benchmarks"
+    ],
+    "docs": [
+      "docs",
+      "reports"
+    ],
+    "tools": [
+      "tools"
+    ],
+    "integrations": [
+      "integrations"
+    ],
+    "out": [
+      "out"
+    ]
+  },
+  "naming": {
+    "files": "snake_case",
+    "dirs": "snake_case"
+  },
+  "ignore": [
+    ".git",
+    "target",
+    "node_modules"
+  ]
+}

@@ -1,0 +1,38 @@
+{
+  "standard": "xks-folder/1",
+  "name": "Mechanical-Jev",
+  "purpose": "System One questions (noul / choice / score) to Intel Phi Jev from Rust: client library, mjev command line, evaluation harness",
+  "languages": [
+    "rust"
+  ],
+  "layout": {
+    "source": [
+      "src"
+    ],
+    "examples": [
+      "examples"
+    ],
+    "docs": [
+      "docs"
+    ],
+    "tools": [
+      "scripts",
+      "tools"
+    ],
+    "data": [
+      "evidence"
+    ],
+    "out": [
+      "out"
+    ]
+  },
+  "naming": {
+    "files": "snake_case",
+    "dirs": "snake_case"
+  },
+  "ignore": [
+    ".git",
+    "target",
+    "node_modules"
+  ]
+}
