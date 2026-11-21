@@ -1,0 +1,108 @@
+{
+  "name": "05-refusals",
+  "about": "calls that cannot be answered fail with a message and change nothing; outside a project there is no manifest",
+  "steps": [
+    {
+      "tool": "new_project",
+      "args": {
+        "dir": "notes",
+        "purpose": "Notes on the sources of a book, in Markdown.",
+        "languages": [],
+        "kind": "documents",
+        "create_dirs": true
+      },
+      "expect": {
+        "error": false,
+        "eq": {
+          "/manifest/naming/dirs": "kebab-case"
+        }
+      }
+    },
+    {
+      "tool": "extend_layout",
+      "args": {
+        "path_or_root": "notes",
+        "role": "docs",
+        "dirs": [
+          "DesignNotes"
+        ]
+      },
+      "expect": {
+        "error": true,
+        "line_has": [
+          "`design-notes` does"
+        ]
+      }
+    },
+    {
+      "tool": "extend_layout",
+      "args": {
+        "path_or_root": "notes",
+        "role": "config",
+        "dirs": [
+          "etc"
+        ]
+      },
+      "expect": {
+        "error": true,
+        "line_has": [
+          "unknown role `config`"
+        ]
+      }
+    },
+    {
+      "tool": "extend_layout",
+      "args": {
+        "path_or_root": "notes",
+        "role": "tools",
+        "dirs": [
+          "../outside"
+        ]
+      },
+      "expect": {
+        "error": true,
+        "line_has": [
+          "cannot leave the project"
+        ]
+      }
+    },
+    {
+      "tool": "project_info",
+      "args": {
+        "path": "notes"
+      },
+      "expect": {
+        "error": false,
+        "eq": {
+          "/decisions": 0
+        }
+      }
+    },
+    {
+      "tool": "place_file",
+      "args": {
+        "path": "elsewhere/x.rs",
+        "summary": "A Rust file outside any project."
+      },
+      "expect": {
+        "error": true,
+        "line_has": [
+          "new_project writes one"
+        ]
+      }
+    },
+    {
+      "tool": "project_info",
+      "args": {
+        "path": "elsewhere"
+      },
+      "expect": {
+        "error": false,
+        "eq": {
+          "/manifest": null,
+          "/root": null
+        }
+      }
+    }
+  ]
+}

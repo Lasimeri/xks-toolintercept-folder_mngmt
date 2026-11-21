@@ -1,0 +1,39 @@
+{
+  "name": "02-model-kind",
+  "about": "new_project without a kind asks the model (project.kind); the decision is logged",
+  "steps": [
+    {
+      "tool": "new_project",
+      "args": {
+        "dir": "flacopus",
+        "purpose": "A command-line tool that converts FLAC files to Opus in parallel and writes a report of what it converted.",
+        "languages": [
+          "rust"
+        ],
+        "create_dirs": true
+      },
+      "expect": {
+        "error": false,
+        "eq": {
+          "/kind/by": "model",
+          "/logged": ".xks/decisions.jsonl"
+        },
+        "present": [
+          "/kind/confidence",
+          "/kind/probabilities",
+          "/kind/acted_on"
+        ],
+        "files": [
+          "flacopus/xks-project.json",
+          "flacopus/.xks/decisions.jsonl"
+        ]
+      },
+      "record": [
+        "/kind/kind",
+        "/kind/confidence",
+        "/kind/acted_on",
+        "/kind/seconds"
+      ]
+    }
+  ]
+}

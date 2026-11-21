@@ -1,0 +1,151 @@
+{
+  "name": "04-extend-then-place",
+  "about": "extend_layout closes the gap: scripts/ becomes the tools folder, a script placed in it is no gap, a repeat changes nothing",
+  "steps": [
+    {
+      "tool": "new_project",
+      "args": {
+        "dir": "flacopus",
+        "purpose": "A command-line tool that converts FLAC files to Opus in parallel and writes a report of what it converted.",
+        "languages": [
+          "rust"
+        ],
+        "kind": "cli-tool",
+        "create_dirs": true
+      },
+      "expect": {
+        "error": false,
+        "line_has": [
+          "kind cli-tool (given)",
+          "4 created"
+        ],
+        "eq": {
+          "/kind/by": "given",
+          "/manifest/naming/files": "snake_case"
+        },
+        "pluck": {
+          "/tree": {
+            "field": "folder",
+            "eq": [
+              "docs/",
+              "out/",
+              "src/",
+              "tests/"
+            ]
+          }
+        },
+        "dirs": [
+          "flacopus/src",
+          "flacopus/tests",
+          "flacopus/docs",
+          "flacopus/out"
+        ],
+        "files": [
+          "flacopus/xks-project.json"
+        ]
+      }
+    },
+    {
+      "tool": "extend_layout",
+      "args": {
+        "path_or_root": "flacopus",
+        "role": "tools",
+        "dirs": [
+          "scripts"
+        ],
+        "create_dirs": true
+      },
+      "expect": {
+        "error": false,
+        "line_has": [
+          "tools -> scripts/ (added scripts/; 1 folder created)"
+        ],
+        "eq": {
+          "/added": [
+            "scripts/"
+          ],
+          "/layout/tools": [
+            "scripts"
+          ]
+        },
+        "dirs": [
+          "flacopus/scripts"
+        ]
+      }
+    },
+    {
+      "tool": "extend_layout",
+      "args": {
+        "path_or_root": "flacopus",
+        "role": "tools",
+        "dirs": [
+          "./scripts/"
+        ]
+      },
+      "expect": {
+        "error": false,
+        "eq": {
+          "/added": [],
+          "/already": [
+            "scripts/"
+          ],
+          "/logged": null
+        }
+      }
+    },
+    {
+      "tool": "place_file",
+      "args": {
+        "path": "flacopus/bench.sh",
+        "summary": "Shell script that times the conversion of 100 FLAC files and prints the seconds."
+      },
+      "expect": {
+        "error": false,
+        "pluck": {
+          "/layout_gaps": {
+            "field": "at",
+            "eq": [
+              "bench.sh"
+            ]
+          }
+        },
+        "eq": {
+          "/layout_gaps/0/layout_has": [
+            {
+              "role": "tests",
+              "dir": "tests/"
+            },
+            {
+              "role": "tools",
+              "dir": "scripts/"
+            }
+          ]
+        }
+      },
+      "record": [
+        "/verdict/action",
+        "/verdict/role",
+        "/verdict/confidence",
+        "/answers/file.root/probabilities"
+      ]
+    },
+    {
+      "tool": "place_file",
+      "args": {
+        "path": "flacopus/scripts/bench.sh",
+        "summary": "Shell script that times the conversion of 100 FLAC files and prints the seconds."
+      },
+      "expect": {
+        "error": false,
+        "eq": {
+          "/layout_gaps": []
+        }
+      },
+      "record": [
+        "/verdict/action",
+        "/verdict/role",
+        "/verdict/confidence"
+      ]
+    }
+  ]
+}

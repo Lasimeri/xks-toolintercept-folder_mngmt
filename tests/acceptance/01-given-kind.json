@@ -1,0 +1,86 @@
+{
+  "name": "01-given-kind",
+  "about": "new_project with a given kind needs no model; a second call returns the manifest unchanged; project_info reads it",
+  "steps": [
+    {
+      "tool": "new_project",
+      "args": {
+        "dir": "flacopus",
+        "purpose": "A command-line tool that converts FLAC files to Opus in parallel and writes a report of what it converted.",
+        "languages": [
+          "rust"
+        ],
+        "kind": "cli-tool",
+        "create_dirs": true
+      },
+      "expect": {
+        "error": false,
+        "line_has": [
+          "kind cli-tool (given)",
+          "4 created"
+        ],
+        "eq": {
+          "/kind/by": "given",
+          "/manifest/naming/files": "snake_case"
+        },
+        "pluck": {
+          "/tree": {
+            "field": "folder",
+            "eq": [
+              "docs/",
+              "out/",
+              "src/",
+              "tests/"
+            ]
+          }
+        },
+        "dirs": [
+          "flacopus/src",
+          "flacopus/tests",
+          "flacopus/docs",
+          "flacopus/out"
+        ],
+        "files": [
+          "flacopus/xks-project.json"
+        ]
+      }
+    },
+    {
+      "tool": "new_project",
+      "args": {
+        "dir": "flacopus",
+        "purpose": "Something else entirely.",
+        "languages": [],
+        "create_dirs": true
+      },
+      "expect": {
+        "error": false,
+        "line_has": [
+          "already holds xks-project.json",
+          "nothing was written"
+        ],
+        "eq": {
+          "/existing": true,
+          "/manifest/purpose": "A command-line tool that converts FLAC files to Opus in parallel and writes a report of what it converted."
+        }
+      }
+    },
+    {
+      "tool": "project_info",
+      "args": {
+        "path": "flacopus/src"
+      },
+      "expect": {
+        "error": false,
+        "eq": {
+          "/name": "flacopus",
+          "/kind": "cli-tool",
+          "/layout/source": [
+            "src"
+          ],
+          "/decisions": 0
+        }
+      }
+    }
+  ]
+}

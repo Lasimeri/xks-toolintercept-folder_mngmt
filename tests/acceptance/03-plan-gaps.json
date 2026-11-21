@@ -1,0 +1,109 @@
+{
+  "name": "03-plan-gaps",
+  "about": "plan_tree reports the planned paths no layout folder holds: a script in the root and a new top-level folder",
+  "steps": [
+    {
+      "tool": "new_project",
+      "args": {
+        "dir": "flacopus",
+        "purpose": "A command-line tool that converts FLAC files to Opus in parallel and writes a report of what it converted.",
+        "languages": [
+          "rust"
+        ],
+        "kind": "cli-tool",
+        "create_dirs": true
+      },
+      "expect": {
+        "error": false,
+        "line_has": [
+          "kind cli-tool (given)",
+          "4 created"
+        ],
+        "eq": {
+          "/kind/by": "given",
+          "/manifest/naming/files": "snake_case"
+        },
+        "pluck": {
+          "/tree": {
+            "field": "folder",
+            "eq": [
+              "docs/",
+              "out/",
+              "src/",
+              "tests/"
+            ]
+          }
+        },
+        "dirs": [
+          "flacopus/src",
+          "flacopus/tests",
+          "flacopus/docs",
+          "flacopus/out"
+        ],
+        "files": [
+          "flacopus/xks-project.json"
+        ]
+      }
+    },
+    {
+      "tool": "plan_tree",
+      "args": {
+        "root": "flacopus",
+        "files": [
+          {
+            "path": "README.md",
+            "summary": "What flacopus does and how to install it."
+          },
+          {
+            "path": "bench.sh",
+            "summary": "Shell script that times the conversion of 100 FLAC files and prints the seconds."
+          },
+          {
+            "path": "scripts/",
+            "summary": "Helper scripts for making a release."
+          },
+          {
+            "path": "scripts/release.sh",
+            "summary": "Builds the release binary, tags it and writes the checksums."
+          },
+          {
+            "path": "src/cli.rs",
+            "summary": "Defines the command-line flags with clap."
+          }
+        ]
+      },
+      "expect": {
+        "error": false,
+        "line_has": [
+          "plan of 5 paths in flacopus",
+          "layout gaps bench.sh, scripts/ (see layout_gaps)"
+        ],
+        "eq": {
+          "/files/0/by": "rules",
+          "/files/0/action": "allow"
+        },
+        "pluck": {
+          "/layout_gaps": {
+            "field": "at",
+            "eq": [
+              "bench.sh",
+              "scripts/"
+            ]
+          }
+        }
+      },
+      "record": [
+        "/files/1/role",
+        "/files/1/confidence",
+        "/files/2/role",
+        "/files/2/confidence",
+        "/files/3/action",
+        "/files/3/role",
+        "/files/3/confidence",
+        "/files/4/role",
+        "/files/4/confidence",
+        "/requests"
+      ]
+    }
+  ]
+}
