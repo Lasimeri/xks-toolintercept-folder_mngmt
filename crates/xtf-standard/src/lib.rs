@@ -45,6 +45,7 @@ pub mod naming;
 pub mod policy;
 pub mod projection;
 pub mod roles;
+pub mod scaffold;
 
 pub use decide::{Decider, Decision};
 pub use manifest::{MANIFEST_FILE, Manifest, Place, STANDARD};

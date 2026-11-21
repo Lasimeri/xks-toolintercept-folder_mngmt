@@ -87,6 +87,13 @@ fn subject(p: &Projection) -> String {
 /// else those its extension makes plausible (`roles::plausible`), `out`
 /// always kept. One role left means a rule decides and the question is not
 /// asked.
+///
+/// `out` is offered beside the plausible roles, never chosen for want of
+/// them: when the layout has none of the roles the extension allows (a
+/// script in a project without tools, tests, integrations or examples
+/// folders), the extension says nothing about this project and every role
+/// is offered. Only an extension whose one role is `out` (`.log`) settles a
+/// file there.
 pub fn root_options(m: &Manifest, p: &Projection) -> Vec<Role> {
     let roles = m.roles();
     if p.op == Op::CreateDir {
@@ -95,13 +102,19 @@ pub fn root_options(m: &Manifest, p: &Projection) -> Vec<Role> {
     if let Some(r) = roles::by_name(p.name()).filter(|r| roles.contains(r)) {
         return vec![r];
     }
-    match roles::plausible(p.name()) {
-        None => roles,
-        Some(ok) => roles
-            .into_iter()
-            .filter(|r| *r == Role::Out || ok.contains(r))
-            .collect(),
+    let Some(ok) = roles::plausible(p.name()) else {
+        return roles;
+    };
+    let narrowed: Vec<Role> = roles
+        .iter()
+        .copied()
+        .filter(|r| *r == Role::Out || ok.contains(r))
+        .collect();
+    let means_out = ok.iter().all(|r| *r == Role::Out);
+    if !means_out && narrowed.iter().all(|r| *r == Role::Out) {
+        return roles;
     }
+    narrowed
 }
 
 /// `file.root`: which of `root_options` the new file or folder plays.
@@ -187,5 +200,33 @@ mod tests {
             }
             other => panic!("file.root is a choice, not {other:?}"),
         }
+    }
+
+    #[test]
+    fn out_is_never_left_by_elimination() {
+        let mut m = Manifest::new("demo", "A demo.", vec!["rust".into()]);
+        m.layout.clear();
+        m.layout.insert(Role::Source, vec!["crates".into()]);
+        m.layout.insert(Role::Docs, vec!["docs".into()]);
+        let file = |path: &str| Projection {
+            op: Op::CreateFile,
+            path: path.into(),
+            from: None,
+            summary: String::new(),
+            tool: None,
+        };
+        // A script: none of tools, tests, integrations, examples in the
+        // layout, so the extension says nothing here: every role is offered.
+        assert_eq!(
+            root_options(&m, &file("calibration/make-set.sh")),
+            m.roles()
+        );
+        // A log: its extension means generated output, so out settles it.
+        assert_eq!(root_options(&m, &file("run.log")), [Role::Out]);
+        // Source code: the plausible roles the layout has, and out.
+        assert_eq!(
+            root_options(&m, &file("crates/a/src/x.rs")),
+            [Role::Source, Role::Out]
+        );
     }
 }

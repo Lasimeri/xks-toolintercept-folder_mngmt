@@ -1,0 +1,7 @@
+{
+  "mcpServers": {
+    "xtf": {
+      "command": "${CLAUDE_PLUGIN_ROOT}/bin/xtf-mcp"
+    }
+  }
+}

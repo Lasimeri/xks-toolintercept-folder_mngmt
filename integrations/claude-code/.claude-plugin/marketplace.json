@@ -1,0 +1,13 @@
+{
+  "name": "xtf",
+  "description": "xtf: folder and naming decisions for every Claude Code project by the xks-folder/1 standard, decided by a local Jev-like model.",
+  "owner": { "name": "Lasimeri", "url": "https://github.com/Lasimeri/xks-toolintercept-folder_mngmt" },
+  "plugins": [
+    {
+      "name": "xtf",
+      "source": "./plugin",
+      "description": "Checks every new file and folder Claude creates against the project's xks-project.json (a hook on Write and mkdir), lays out new projects, and offers MCP tools to place files, plan folder trees and pick names. Decisions come from one local jevbase serve.",
+      "category": "productivity"
+    }
+  ]
+}

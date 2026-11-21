@@ -11,11 +11,12 @@ becomes the same fixed, typed question, answered by a System One model
 (TypeSafe's Jev, or a local Jev-like model), acted on only when the model is
 confident, and written down.
 
-**Status: 0.1.0, the first release.** It contains the standard
-([xks-folder/1](SPEC.md)), its implementation as a Rust library and the
-`xtf` command line, and its calibration on six real repositories. The MCP
-server and the Claude Code hook that put it in front of an agent are the next
-step ([Roadmap](#roadmap)); they are not in this release.
+**Status: 0.2.0.** The standard ([xks-folder/1](SPEC.md)), its Rust
+library and `xtf` command line, its calibration on six real repositories,
+and, new in 0.2.0, the **Claude Code plugin** that puts it in front of every
+session automatically: a hook on every new file and folder, an MCP server
+with five tools (new projects and their folder structure among them), and
+one shared model instance as a user service ([Claude Code](#claude-code)).
 
 ## How a decision is made
 
@@ -82,6 +83,51 @@ xtf check src/thumbnails.rs --summary "//! Builds JPEG thumbnails for the sync p
 
 `check` prints the decision as JSON and appends it to `.xks/decisions.jsonl`.
 Every command is described in [docs/cli.md](docs/cli.md).
+
+## Claude Code
+
+One command makes it automatic in every Claude Code session and project on
+the machine:
+
+```sh
+make install-claude
+```
+
+It installs a Claude Code plugin (a directory marketplace under
+`~/.local/share/xtf/claude-code`, enabled at user scope) and the decision
+server as a systemd user service (`jevbase.service`: `jevbase serve` on
+127.0.0.1:8097, the model held in RAM, started at login). `jevbase` itself
+comes from [XKS_Jev-like_Model_Base](https://github.com/Lasimeri/XKS_Jev-like_Model_Base)
+(its release archive, or `make install` there). Every session then shares
+that one model instance.
+
+What every session gets:
+
+| piece | when | what it does |
+|---|---|---|
+| `xtf-hook session-start` | a session starts, resumes, clears or compacts | tells Claude the project's layout and naming from `xks-project.json` (or that the project has none, and how one is written); no model call, under 1 ms |
+| `xtf-hook pre-tool-use` | every `Write` of a new file, every `mkdir` | the model decides the new path against the manifest; when it is confident (>= 0.5) the file belongs elsewhere, or a name breaks the naming style, the first attempt is denied with the suggested path, and the same attempt again goes through (`XTF_HOOK_MODE=enforce`, the default; `advise` adds the suggestion as context only; `off`) |
+| MCP tool `new_project` | Claude starts a project | the model decides the project's kind, the standard lays out its folders for that kind and language, the manifest is written and the folders created |
+| MCP tools `place_file`, `plan_tree`, `pick_name`, `project_info` | Claude asks | one placement, a whole planned folder tree, a name among candidates, the project's manifest and decision count |
+
+Outside any project, a new file or folder gets a note (once per session and
+folder) that `new_project` or `xtf init` writes a manifest; nothing is
+blocked. Every decision is appended to the project's `.xks/decisions.jsonl`.
+A decision server that is down, busy past 15 s or refusing never blocks
+Claude: the hook lets the operation through and records why in
+`~/.cache/xtf/hook/errors.log`. Details: [docs/hook.md](docs/hook.md),
+[docs/mcp.md](docs/mcp.md).
+
+Checked with Claude Code 2.1.316 itself (`claude -p` on this machine,
+2026-11-21, Qwen3.8 2B Q8_0 behind the server):
+
+| test | result |
+|---|---|
+| a session in a project | plugin loaded, MCP server connected, the five tools offered, the layout given at session start |
+| a Rust source file written into `docs/` | decided by the model: source, confidence 0.47, under 0.5, so left as is (4.2 s) |
+| `src/ParseFlags.rs` in a snake_case project | denied with `src/parse_flags.rs` suggested (3.3 s); the session wrote the same path again, as its prompt named it, and the hook let it through |
+| "lay out a new project" through `new_project` | kind cli-tool decided by the model at confidence 0.85, manifest written, `src/ tests/ docs/ out/` created |
+| three sessions writing new files at the same time | all three decided (4.2 s, 5.3 s, 5.7 s, the queue included), none timed out, the shared decision log intact |
 
 ## Configuration
 
@@ -186,17 +232,29 @@ if decision.verdict.action == Action::Suggest {
   read three times, once per rotation of its options). Questions about one
   project share a cached state, so the first decision on a project costs
   more than the next.
+- **One request at a time.** `jevbase serve` answers requests in turn, so
+  sessions deciding at once queue behind each other (three at once: 4.2 to
+  5.7 s each). A hook that waits past 15 s lets its operation through
+  undecided; that takes about five decisions arriving together, or one
+  behind a long `plan_tree` (requests carry at most 8 questions, so none
+  holds the server longer than about 10 s).
+- **Folders are judged by name.** `file.root` sees a new path's name and
+  summary, not the folder it is about to go in, and the folders decided so
+  far (with only a name and the shell command's description to go on) all
+  stayed under 0.5 confidence.
+- **Local sessions only.** Claude Code's cloud sessions do not read the
+  local `~/.claude`, and the server listens on 127.0.0.1.
 - **Text only.** Images and binary files are not read.
 - **The layout is yours to write.** `xtf init` maps common folder names; a
   manifest is only as good as its layout.
 
 ## Roadmap
 
-- `xtf-mcp`: an MCP server so the agent asks before it acts (place a file,
-  plan a whole tree in one request, pick a name among its candidates).
-- `xtf-hook`: a Claude Code hook that intercepts tool calls creating files
-  and folders, advises the agent, or stops the call when the standard says
-  the file belongs elsewhere.
+- A decision server that serves several requests at once, each project's
+  state cached in its own sequence (XKS_Jev-like_Model_Base).
+- A placement question that sees where the path is going, and richer
+  evidence for new folders, so folder decisions can reach the confidence
+  the policy acts on (a new standard version, recalibrated).
 - Calibration against more repositories and other decision models.
 
 ## License

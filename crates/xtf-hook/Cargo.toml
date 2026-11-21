@@ -1,0 +1,21 @@
+[package]
+name = "xtf-hook"
+description = "The Claude Code hook of standard xks-folder/1: new files and folders decided against the project's layout before they are made"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+readme = "../../README.md"
+keywords = ["jev", "system-one", "claude-code", "hooks", "project-layout"]
+categories = ["command-line-utilities", "development-tools"]
+
+[[bin]]
+name = "xtf-hook"
+path = "src/main.rs"
+
+[dependencies]
+xtf-standard = { path = "../xtf-standard" }
+jevbase.workspace = true
+serde.workspace = true
+serde_json.workspace = true

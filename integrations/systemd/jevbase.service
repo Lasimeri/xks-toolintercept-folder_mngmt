@@ -1,0 +1,24 @@
+# The one decision server every Claude Code session shares: jevbase serve
+# (XKS_Jev-like_Model_Base) on 127.0.0.1:8097, the model held in RAM, 8 CPU
+# threads. Installed to ~/.config/systemd/user/ by `make install-claude`.
+#
+# Settings: ~/.config/jevbase/jevbase.conf (model, threads, bind, api_keys);
+# the built-in defaults apply without it. The working directory is the home
+# folder, so a stray ./jevbase.conf elsewhere never applies.
+
+[Unit]
+Description=jevbase serve: the Jev-like decision server (one model instance)
+Documentation=https://github.com/Lasimeri/xks-toolintercept-folder_mngmt
+
+[Service]
+Type=simple
+WorkingDirectory=%h
+ExecStart=%h/.local/bin/jevbase serve
+Restart=on-failure
+RestartSec=5
+# Decisions are short bursts; other work on the machine keeps precedence.
+CPUWeight=50
+Nice=5
+
+[Install]
+WantedBy=default.target

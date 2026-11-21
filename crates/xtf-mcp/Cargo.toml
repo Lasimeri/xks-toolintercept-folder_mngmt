@@ -1,0 +1,20 @@
+[package]
+name = "xtf-mcp"
+description = "The xks-folder/1 standard as an MCP server over stdio: place files, plan folder trees, pick names and set up new projects through any System One server"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+readme = "../../README.md"
+keywords = ["mcp", "claude-code", "jev", "project-layout", "decisions"]
+categories = ["command-line-utilities", "development-tools"]
+
+[[bin]]
+name = "xtf-mcp"
+path = "src/main.rs"
+
+[dependencies]
+xtf-standard = { path = "../xtf-standard" }
+jevbase.workspace = true
+serde_json.workspace = true

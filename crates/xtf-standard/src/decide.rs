@@ -125,11 +125,17 @@ pub fn log(root: &Path, p: &Projection, d: &Decision) -> std::io::Result<()> {
         "answers": d.answers,
         "seconds": (d.seconds * 1e3).round() / 1e3,
     });
+    // One write of the whole line on an append-mode file: the hook and the
+    // MCP server of several Claude Code sessions append to the same log, and
+    // a line written piecemeal (the formatter's many small writes, 84 for a
+    // 250-byte record under strace) could be split by another writer's.
+    let mut text = line.to_string();
+    text.push('\n');
     let mut f = std::fs::OpenOptions::new()
         .create(true)
         .append(true)
         .open(path)?;
-    writeln!(f, "{line}")
+    f.write_all(text.as_bytes())
 }
 
 /// The time now in UTC, `YYYY-MM-DDTHH:MM:SSZ`.

@@ -1,7 +1,7 @@
 {
   "standard": "xks-folder/1",
   "name": "xks-toolintercept-folder_mngmt",
-  "purpose": "The xks-folder/1 standard, its Rust library and the xtf command line: they ask a Jev-like model, through any System One server, where a project's new files and folders belong and what to name them. An MCP server and a Claude Code hook are planned on top.",
+  "purpose": "The xks-folder/1 standard, its Rust library, the xtf command line and the Claude Code plugin (a hook and an MCP server): they ask a Jev-like model, through any System One server, where a project's new files and folders belong and what to name them.",
   "languages": [
     "rust"
   ],
@@ -11,6 +11,9 @@
     ],
     "docs": [
       "docs"
+    ],
+    "integrations": [
+      "integrations"
     ],
     "data": [
       "calibration"

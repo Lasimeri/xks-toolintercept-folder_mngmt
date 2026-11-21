@@ -132,6 +132,26 @@ impl Manifest {
             .unwrap_or_else(|| role.default_dir().to_string())
     }
 
+    /// Whether `rel` (a path relative to the root) is a folder the manifest
+    /// names itself: a layout directory or an `ignore` entry. Creating one is
+    /// what the manifest already says, so there is nothing to decide.
+    pub fn declares(&self, rel: &str) -> bool {
+        let plain = |d: &str| {
+            d.split('/')
+                .filter(|s| !s.is_empty() && *s != ".")
+                .collect::<Vec<_>>()
+                .join("/")
+        };
+        let rel = plain(rel);
+        !rel.is_empty()
+            && self
+                .layout
+                .values()
+                .flatten()
+                .chain(&self.ignore)
+                .any(|d| plain(d) == rel)
+    }
+
     /// Where `rel` (a path relative to the root) falls: the layout directory
     /// with the longest matching prefix decides.
     pub fn place(&self, rel: &Path) -> Place {

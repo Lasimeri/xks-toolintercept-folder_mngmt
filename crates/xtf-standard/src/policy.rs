@@ -93,6 +93,11 @@ pub fn rules(m: &Manifest, p: &Projection) -> Pre {
     if p.op == Op::Delete {
         return Pre::Done(Verdict::allow("deletions are not decided on"));
     }
+    if p.op == Op::CreateDir && m.declares(&p.path) {
+        return Pre::Done(Verdict::allow(
+            "a folder the manifest names (layout or ignore): nothing to decide",
+        ));
+    }
     let place = m.place(std::path::Path::new(&p.path));
     if place == Place::Unmanaged {
         return Pre::Done(Verdict::allow(
@@ -253,6 +258,20 @@ mod tests {
                 styled: "parse_it.rs".into()
             }
         );
+        // A folder the manifest names is what the manifest already says; a
+        // folder it does not name is decided (the model is asked).
+        assert!(matches!(
+            rules(&m, &proj(Op::CreateDir, "tests")),
+            Pre::Done(_)
+        ));
+        assert!(matches!(
+            rules(&m, &proj(Op::CreateDir, "./tests/")),
+            Pre::Done(_)
+        ));
+        assert!(matches!(
+            rules(&m, &proj(Op::CreateDir, "misc")),
+            Pre::Ask { .. }
+        ));
     }
 
     #[test]

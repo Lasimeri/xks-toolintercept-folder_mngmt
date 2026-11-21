@@ -2,8 +2,8 @@
 
 How an agent's folder and naming decisions are asked of a Jev-like model,
 the same way in every project. Implemented by `crates/xtf-standard` (the
-library and the `xtf` command line); the MCP server and the Claude Code hook
-on the roadmap will only call it.
+library and the `xtf` command line); the MCP server (`crates/xtf-mcp`) and
+the Claude Code hook (`crates/xtf-hook`) only call it.
 
 ## The decision server: any System One server
 
@@ -58,11 +58,12 @@ This repository's own:
 {
   "standard": "xks-folder/1",
   "name": "xks-toolintercept-folder_mngmt",
-  "purpose": "The xks-folder/1 standard, its Rust library and the xtf command line: they ask a Jev-like model, through any System One server, where a project's new files and folders belong and what to name them. An MCP server and a Claude Code hook are planned on top.",
+  "purpose": "The xks-folder/1 standard, its Rust library, the xtf command line and the Claude Code plugin (a hook and an MCP server): they ask a Jev-like model, through any System One server, where a project's new files and folders belong and what to name them.",
   "languages": ["rust"],
   "layout": {
     "source": ["crates"],
     "docs": ["docs"],
+    "integrations": ["integrations"],
     "data": ["calibration"],
     "out": ["out"]
   },
@@ -143,7 +144,14 @@ narrowed for a file by two fixed rules of the standard (`roles.rs`):
   or examples; structured data config, data, examples, tests, integrations
   or benches; plain text docs, data, tests or examples; pictures and fonts
   assets or docs; service units integrations; a `.log` only `out`. `out` is
-  always offered. One role left: the rule decides, nothing is asked.
+  always offered. One role left: the rule decides, nothing is asked. `out`
+  is never left by elimination: when the layout has none of the roles the
+  extension allows (a script in a project without tools, tests,
+  integrations or examples folders), the extension says nothing about this
+  project and every role is offered; only an extension whose one role is
+  `out` (`.log`) settles a file there. (Since 0.2.0; no item of the
+  calibration set is affected: its seven rule-settled files are five test or
+  benchmark names and two `.log` files.)
 
 ## Question catalog
 
@@ -161,17 +169,52 @@ firmware-driver, research, data-pipeline, documents, configuration, mixed
 Wording, option sets and their order are part of the standard: changing any
 of them changes the answers, so it makes a new standard version.
 
+## New projects
+
+A new project (the MCP tool `new_project`) gets its manifest in two steps:
+
+1. **Its kind**, when the caller does not give one: `project.kind`, asked on
+   a state rendered from the project's name, purpose and languages. Acted
+   on at Choice confidence 0.5 or more; below it `kind` stays unset and the
+   `mixed` layout is used.
+2. **Its layout**, a fixed table (`scaffold.rs`, never a model question:
+   the same kind and languages always give the same tree): the roles the
+   kind starts with, every kind also getting `docs` and `out`, and each
+   role's folder by the first language's convention (Rust `src`, `tests`,
+   `benches`; Go `cmd`, `internal`, tests beside the code; JS and TS `src`,
+   `test`, `public`, `dist`; Java `src/main`, `src/test`; the full table is
+   in the module).
+
+| kind | roles |
+|---|---|
+| library | source, tests, benches, examples (+ include: C/C++) |
+| cli-tool | source, tests |
+| service | source, tests, integrations |
+| interactive-app | source, tests, assets |
+| website | source, tests, assets |
+| firmware-driver | source, tests, tools (+ include: C/C++) |
+| research | source, data, tools |
+| data-pipeline | source, tests, data |
+| documents | docs and out only |
+| configuration | integrations, tools |
+| mixed | source, tests, tools, data |
+
+An existing manifest is never replaced. The project changes its layout
+freely afterwards; the decisions read whatever the manifest says.
+
 ## Rules (no model)
 
 In order, for each projected operation:
 
 1. A deletion: allow.
-2. A path under `ignore`, `out` or `third_party`: allow.
-3. A conventional file in the root (README, LICENSE, NOTICE, Makefile,
+2. A new folder the manifest names itself (a layout or `ignore` entry not
+   created yet): allow (since 0.2.0).
+3. A path under `ignore`, `out` or `third_party`: allow.
+4. A conventional file in the root (README, LICENSE, NOTICE, Makefile,
    Cargo.toml, CLAUDE.md, dotfiles, ...): allow.
-4. A governed name that breaks the naming style: the converted name is
+5. A governed name that breaks the naming style: the converted name is
    suggested (and the questions are still asked for the place).
-5. A path under a top-level folder the layout does not map: noted.
+6. A path under a top-level folder the layout does not map: noted.
 
 ## Policy (answers into actions)
 

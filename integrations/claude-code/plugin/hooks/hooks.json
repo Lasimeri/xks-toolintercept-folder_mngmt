@@ -1,0 +1,27 @@
+{
+  "description": "xtf: summarise the project's xks-folder/1 layout at session start; decide every new file (Write) and new folder (mkdir) against it",
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "startup|resume|clear|compact",
+        "hooks": [
+          { "type": "command", "command": "${CLAUDE_PLUGIN_ROOT}/bin/xtf-hook", "args": ["session-start"], "timeout": 5 }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Write",
+        "hooks": [
+          { "type": "command", "command": "${CLAUDE_PLUGIN_ROOT}/bin/xtf-hook", "args": ["pre-tool-use"], "timeout": 30, "statusMessage": "xtf: deciding where the new file belongs" }
+        ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          { "type": "command", "if": "Bash(mkdir *)", "command": "${CLAUDE_PLUGIN_ROOT}/bin/xtf-hook", "args": ["pre-tool-use"], "timeout": 30, "statusMessage": "xtf: deciding where the new folder belongs" }
+        ]
+      }
+    ]
+  }
+}
